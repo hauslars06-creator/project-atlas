@@ -1,0 +1,9 @@
+services:
+  atlas:
+    build: .
+    container_name: project-atlas
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8000:8000"
