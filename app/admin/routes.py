@@ -201,6 +201,17 @@ async def admin_dashboard(
             "ZECUSDT",
             "LTCUSDT",
             "UNIUSDT",
+            "NVDAUSDT",
+            "METAUSDT",
+            "TSLAUSDT",
+            "AMZNUSDT",
+            "GOOGLUSDT",
+            "AMDUSDT",
+            "SAMSUNGUSDT",
+            "INTCUSDT",
+            "MSFTUSDT",
+            "APPLUSDT",
+            "PYPLUSDT",
         ]
 
         signal_timeframes = [
