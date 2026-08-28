@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        {% if mode == "create" %}
+            Neues Signal – Project Atlas
+        {% else %}
+            Signal bearbeiten – Project Atlas
+        {% endif %}
+    </title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 16px;
+        }
+
+        .checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox input {
+            width: auto;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        button,
+        .back-button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+        }
+
+        .back-button {
+            background: #475569;
+            color: white;
+        }
+
+        .hint {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>
+            {% if mode == "create" %}
+                Neues Signal
+            {% else %}
+                Signal bearbeiten
+            {% endif %}
+        </h1>
+
+        <form
+            method="post"
+            {% if mode == "create" %}
+                action="/admin/signals/new"
+            {% else %}
+                action="/admin/signals/{{ signal.signal_id }}/edit"
+            {% endif %}
+        >
+
+            {% if mode == "create" %}
+                <div class="form-group">
+                    <label for="signal_id">Signal-ID</label>
+
+                    <input
+                        id="signal_id"
+                        name="signal_id"
+                        type="text"
+                        placeholder="BTC_15M_BULLISH_DIVERGENCE_REGULAR"
+                        required
+                    >
+
+                    <div class="hint">
+                        Muss exakt zur Signal-ID des TradingView-Webhooks passen.
+                    </div>
+                </div>
+            {% else %}
+                <div class="form-group">
+                    <label>Signal-ID</label>
+
+                    <input
+                        type="text"
+                        value="{{ signal.signal_id }}"
+                        disabled
+                    >
+                </div>
+            {% endif %}
+
+
+            <div class="form-group">
+                <label for="display_name">Anzeigename</label>
+
+                <input
+                    id="display_name"
+                    name="display_name"
+                    type="text"
+                    value="{{ signal.display_name if signal else '' }}"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label for="symbol">Symbol</label>
+
+                <select
+                    id="symbol"
+                    name="symbol"
+                    required
+                >
+                    {% set current_symbol =
+                        signal.symbol if signal else "" %}
+
+                    {% for symbol in [
+                        "BTCUSDT",
+                        "ETHUSDT",
+                        "SOLUSDT",
+                        "XRPUSDT",
+                        "BNBUSDT",
+                        "DOGEUSDT",
+                        "ADAUSDT",
+                        "LINKUSDT",
+                        "AVAXUSDT",
+                        "SUIUSDT",
+                        "SEIUSDT",
+                        "ONDOUSDT",
+                        "AAVEUSDT",
+                        "ALGOUSDT",
+                        "WIFUSDT",
+                        "HYPEUSDT",
+                        "NEARUSDT"
+                    ] %}
+                        <option
+                            value="{{ symbol }}"
+                            {% if current_symbol == symbol %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ symbol }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="direction">Richtung</label>
+
+                <select
+                    id="direction"
+                    name="direction"
+                    required
+                >
+                    <option
+                        value="LONG"
+                        {% if signal and signal.direction == "LONG" %}
+                            selected
+                        {% endif %}
+                    >
+                        LONG
+                    </option>
+
+                    <option
+                        value="SHORT"
+                        {% if signal and signal.direction == "SHORT" %}
+                            selected
+                        {% endif %}
+                    >
+                        SHORT
+                    </option>
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="timeframe">
+                    Zeitrahmen
+                </label>
+
+                <select
+                    id="timeframe"
+                    name="timeframe"
+                    required
+                >
+                    {% if signal
+                          and signal.timeframe == "UNKNOWN" %}
+                        <option
+                            value="UNKNOWN"
+                            selected
+                        >
+                            UNKNOWN – bitte wählen
+                        </option>
+                    {% endif %}
+
+                    {% for tf, label in [
+                        ("1m", "1 Minute"),
+                        ("3m", "3 Minuten"),
+                        ("5m", "5 Minuten"),
+                        ("15m", "15 Minuten"),
+                        ("30m", "30 Minuten"),
+                        ("1h", "1 Stunde"),
+                        ("2h", "2 Stunden"),
+                        ("4h", "4 Stunden"),
+                        ("12h", "12 Stunden"),
+                        ("1D", "1 Tag")
+                    ] %}
+                        <option
+                            value="{{ tf }}"
+                            {% if signal
+                                  and signal.timeframe == tf %}
+                                selected
+                            {% elif not signal
+                                    and tf == "15m" %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="margin_usdt">Margin in USDT</label>
+
+                <input
+                    id="margin_usdt"
+                    name="margin_usdt"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value="{{ signal.margin_usdt if signal else '10' }}"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label for="leverage">Hebel</label>
+
+                <input
+                    id="leverage"
+                    name="leverage"
+                    type="number"
+                    min="1"
+                    value="{{ signal.leverage if signal else '20' }}"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label for="take_profit_percent">
+                    Take Profit in %
+                </label>
+
+                <input
+                    id="take_profit_percent"
+                    name="take_profit_percent"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value="{{ signal.take_profit_percent if signal else '0.35' }}"
+                    required
+                >
+            </div>
+
+
+            
+            <div class="form-group">
+                <label for="take_profit_2_percent">
+                    TP2
+                </label>
+
+                <select
+                    id="take_profit_2_percent"
+                    name="take_profit_2_percent"
+                >
+                    {% set current_tp2 =
+                        signal.take_profit_2_percent
+                        if signal
+                        and signal.take_profit_2_percent
+                        else none
+                    %}
+
+                    <option
+                        value=""
+                        {% if current_tp2 is none %}
+                            selected
+                        {% endif %}
+                    >
+                        Kein TP2
+                    </option>
+
+                    {% for value, label in [
+                        (0.5, "0,5 %"),
+                        (1.0, "1,0 %"),
+                        (1.5, "1,5 %"),
+                        (2.0, "2,0 %"),
+                        (2.5, "2,5 %"),
+                        (3.0, "3,0 %"),
+                        (3.5, "3,5 %"),
+                        (4.0, "4,0 %"),
+                        (4.5, "4,5 %"),
+                        (5.0, "5,0 %")
+                    ] %}
+                        <option
+                            value="{{ value }}"
+                            {% if current_tp2 == value %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="break_even_trigger">
+                    Break-even
+                </label>
+
+                {% set current_be =
+                    signal.break_even_mode
+                    if signal
+                    and signal.break_even_mode
+                    else "OFF"
+                %}
+
+                <select
+                    id="break_even_trigger"
+                    name="break_even_trigger"
+                >
+                    <option
+                        value="OFF"
+                        {% if current_be == "OFF" %}
+                            selected
+                        {% endif %}
+                    >
+                        Aus
+                    </option>
+
+                    <option
+                        value="TP1"
+                        {% if current_be == "TP1" %}
+                            selected
+                        {% endif %}
+                    >
+                        Nach TP1
+                    </option>
+
+                    <option
+                        value="TP2"
+                        {% if current_be == "TP2" %}
+                            selected
+                        {% endif %}
+                    >
+                        Stufenweise TP1 / TP2
+                    </option>
+                </select>
+            </div>
+
+<div class="form-group">
+                <label for="stop_loss_percent">
+                    Stop Loss in %
+                </label>
+
+                <select
+                    id="stop_loss_percent"
+                    name="stop_loss_percent"
+                    required
+                >
+                    {% for sl in [
+                        0.5,
+                        1.0,
+                        1.5,
+                        2.0,
+                        2.5,
+                        3.0,
+                        3.5
+                    ] %}
+                        <option
+                            value="{{ sl }}"
+                            {% if signal
+                                  and signal.stop_loss_percent == sl %}
+                                selected
+                            {% elif not signal
+                                    and sl == 2.5 %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ sl }} %
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="margin_mode">Margin-Modus</label>
+
+                <select
+                    id="margin_mode"
+                    name="margin_mode"
+                >
+                    <option
+                        value="CROSS"
+                        {% if not signal or signal.margin_mode == "CROSS" %}
+                            selected
+                        {% endif %}
+                    >
+                        CROSS
+                    </option>
+
+                    <option
+                        value="ISOLATED"
+                        {% if signal and signal.margin_mode == "ISOLATED" %}
+                            selected
+                        {% endif %}
+                    >
+                        ISOLATED
+                    </option>
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label for="order_type">Order-Typ</label>
+
+                <select
+                    id="order_type"
+                    name="order_type"
+                >
+                    <option
+                        value="MARKET"
+                        {% if not signal or signal.order_type == "MARKET" %}
+                            selected
+                        {% endif %}
+                    >
+                        MARKET
+                    </option>
+                </select>
+            </div>
+
+
+            <div class="form-group checkbox">
+
+                <input
+                    id="enabled"
+                    name="enabled"
+                    type="checkbox"
+                    value="true"
+                    {% if mode == "create" or signal.enabled %}
+                        checked
+                    {% endif %}
+                >
+
+                <label for="enabled">
+                    Signal aktiv
+                </label>
+
+            </div>
+
+
+            <div class="buttons">
+
+                <button type="submit">
+                    {% if mode == "create" %}
+                        Signal anlegen
+                    {% else %}
+                        Änderungen speichern
+                    {% endif %}
+                </button>
+
+                <a
+                    href="/admin"
+                    class="back-button"
+                >
+                    Abbrechen
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>

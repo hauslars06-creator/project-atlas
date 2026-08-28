@@ -1,5 +1,24 @@
-from sqlalchemy import Boolean, Float, Integer, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+# ==========================================================
+# Project Atlas
+# File: app/database/models.py
+# Sprint: 1.1A
+# Version: 1.0.0-dev
+# Last Update: 2026-07-24
+# ==========================================================
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    func,
+)
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+)
 
 
 class Base(DeclarativeBase):
@@ -9,7 +28,11 @@ class Base(DeclarativeBase):
 class Signal(Base):
     __tablename__ = "signals"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
 
     signal_id: Mapped[str] = mapped_column(
         String(150),
@@ -33,6 +56,12 @@ class Signal(Base):
         nullable=False,
     )
 
+    timeframe: Mapped[str] = mapped_column(
+        String(20),
+        default="UNKNOWN",
+        nullable=False,
+    )
+
     margin_usdt: Mapped[float] = mapped_column(
         Float,
         nullable=False,
@@ -46,6 +75,18 @@ class Signal(Base):
     take_profit_percent: Mapped[float] = mapped_column(
         Float,
         nullable=False,
+    )
+
+    take_profit_2_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        default=None,
+    )
+
+    break_even_mode: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="OFF",
     )
 
     stop_loss_percent: Mapped[float] = mapped_column(
@@ -68,5 +109,762 @@ class Signal(Base):
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
+        nullable=False,
+    )
+
+
+class OpenTrade(Base):
+    """
+    Enthält ausschließlich aktuell offene Atlas-Trades.
+
+    Gesperrte Trades:
+    - können nicht einzeln geschlossen oder bearbeitet werden,
+    - werden vom globalen Not-Aus ausgeschlossen,
+    - werden später unabhängig von normalen Filtern angezeigt.
+    """
+
+    __tablename__ = "open_trades"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    position_id: Mapped[str] = mapped_column(
+        String(150),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    signal_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    signal_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    symbol: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False,
+    )
+
+    timeframe: Mapped[str] = mapped_column(
+        String(20),
+        default="UNKNOWN",
+        index=True,
+        nullable=False,
+    )
+
+    direction: Mapped[str] = mapped_column(
+        String(10),
+        index=True,
+        nullable=False,
+    )
+
+    is_locked: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    entry_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    current_price: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    liquidation_price: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    tp_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    sl_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    margin_usdt: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    leverage: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    quantity: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+    unrealized_pnl: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    realized_pnl: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    pnl_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    current_margin: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="OPEN",
+        index=True,
+        nullable=False,
+    )
+
+    # PROJECT ATLAS M5.3B EXTERNAL TRADES START
+    trade_source: Mapped[str] = mapped_column(
+        String(20),
+        default="ATLAS",
+        index=True,
+        nullable=False,
+    )
+    # PROJECT ATLAS M5.3B EXTERNAL TRADES END
+
+    is_locked: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        index=True,
+        nullable=False,
+    )
+
+    client_id: Mapped[str | None] = mapped_column(
+        String(150),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+
+    order_id: Mapped[str | None] = mapped_column(
+        String(150),
+        index=True,
+        nullable=True,
+    )
+
+    tp1_order_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    tp2_order_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    sl_order_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    tp2_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tp1_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tp2_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    runner_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    break_even_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="OFF")
+    tp1_processed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    tp2_processed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    opened_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    last_exchange_sync: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+
+
+
+# ==================================================
+# PROJECT ATLAS M5.4A MULTI TPSL MODEL START
+# ==================================================
+
+class OpenTradeTpSlOrder(Base):
+    """Lokaler Read-only-Spiegel offener BitUnix-TP-/SL-Aufträge."""
+
+    __tablename__ = "open_trade_tpsl_orders"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    exchange_order_id: Mapped[str] = mapped_column(
+        String(150),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    position_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    symbol: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False,
+    )
+
+    base_asset: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    quote_asset: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    tp_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tp_stop_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tp_order_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tp_order_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tp_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    sl_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sl_stop_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    sl_order_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    sl_order_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sl_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    synced_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+# ==================================================
+# PROJECT ATLAS M5.4A MULTI TPSL MODEL END
+# ==================================================
+
+
+class TradeHistory(Base):
+    """
+    Enthält vollständig geschlossene Atlas-Trades.
+
+    Offene Trades werden beim bestätigten Schließen aus
+    open_trades in trade_history übertragen.
+    """
+
+    __tablename__ = "trade_history"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    position_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    signal_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    signal_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    symbol: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False,
+    )
+
+    timeframe: Mapped[str] = mapped_column(
+        String(20),
+        default="UNKNOWN",
+        index=True,
+        nullable=False,
+    )
+
+    direction: Mapped[str] = mapped_column(
+        String(10),
+        index=True,
+        nullable=False,
+    )
+
+    is_locked: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        index=True,
+        nullable=False,
+    )
+
+    entry_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    exit_price: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    tp_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    sl_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    margin_usdt: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    leverage: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    quantity: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    pnl_usdt: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    pnl_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    close_reason: Mapped[str] = mapped_column(
+        String(50),
+        default="UNKNOWN",
+        index=True,
+        nullable=False,
+    )
+
+    client_id: Mapped[str | None] = mapped_column(
+        String(150),
+        index=True,
+        nullable=True,
+    )
+
+    order_id: Mapped[str | None] = mapped_column(
+        String(150),
+        index=True,
+        nullable=True,
+    )
+
+    opened_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    closed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        index=True,
+        nullable=False,
+    )
+
+
+# ==========================================================
+# PROJECT ATLAS – P0.3 PERSISTENT WEBHOOK QUEUE
+# ==========================================================
+
+class WebhookQueueItem(Base):
+    __tablename__ = "webhook_queue"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    signal_id: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="PENDING",
+        nullable=False,
+        index=True,
+    )
+
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    last_error: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    started_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    finished_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+# ==========================================================
+# PROJECT ATLAS - SL POST-ANALYSE (MAE / SL-Optimierung)
+# ==========================================================
+
+class SlPostAnalysis(Base):
+    """
+    Speichert das Ergebnis der automatischen Rueckblick-
+    Analyse fuer Trades, die per Stop-Loss geschlossen
+    wurden: wurde der urspruengliche Take-Profit innerhalb
+    des Beobachtungsfensters (Standard 7 Tage) nach dem
+    SL-Exit trotzdem noch erreicht, und wie weit ist der
+    Preis ab Entry maximal noch gegen die Position
+    gelaufen?
+    """
+
+    __tablename__ = "sl_post_analysis"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    position_id: Mapped[str] = mapped_column(
+        String(150),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    signal_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    signal_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    symbol: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False,
+    )
+
+    direction: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+    )
+
+    entry_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    sl_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    tp_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    original_closed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    analyzed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    lookback_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    candle_interval_used: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+    )
+
+    candle_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    tp_would_have_been_reached: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    tp_reached_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    worst_price_after_sl_exit: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    extended_mae_percent_from_entry: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    # Neu (TP-Optimierung): MFE innerhalb des tatsaechlichen
+    # Trade-Zeitraums (Entry bis SL-Exit) - zeigt, wie weit
+    # der Kurs vor dem SL-Treffer schon in die Gewinnzone
+    # gelaufen war. None bei bereits vorhandenen alten
+    # Eintraegen ohne diese Auswertung.
+    mfe_percent_own_window: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+
+# ==========================================================
+# PROJECT ATLAS - TAGES-VERLUSTLIMIT (CIRCUIT BREAKER)
+# ==========================================================
+
+class DailyLossLimitSetting(Base):
+    """
+    Speichert die konfigurierte Tages-Verlustgrenze und den
+    aktuellen Sperrzustand. Es gibt nur EINE Zeile (id=1),
+    die bei Bedarf aktualisiert wird.
+    """
+
+    __tablename__ = "daily_loss_limit_setting"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    # Negativer Wert in USDT, z.B. -10.0 fuer "-10 USDT".
+    # None = kein Limit aktiv.
+    limit_usdt: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    # Gesetzt, sobald das Limit an einem Tag erreicht wurde.
+    # None = aktuell nicht gesperrt.
+    tripped_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Kalendertag (UTC), fuer den tripped_at gilt - dient dem
+    # automatischen Reset am naechsten Tag.
+    tripped_on_date: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+# ==========================================================
+# PROJECT ATLAS - LONG/SHORT-POSITIONSLIMIT
+# ==========================================================
+
+class PositionLimitSetting(Base):
+    """
+    Speichert die maximal erlaubte Anzahl gleichzeitig
+    offener Long- bzw. Short-Trades (Signal-basiert, ohne
+    manuelle/externe Trades). Es gibt nur EINE Zeile (id=1).
+    """
+
+    __tablename__ = "position_limit_setting"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    max_long_trades: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    max_short_trades: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # Getrenntes Limit fuer Aktien-Futures (NVDA, TSLA usw.)
+    # - unabhaengig vom Krypto-Perpetual-Limit oben.
+    max_long_trades_stocks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    max_short_trades_stocks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+# ==========================================================
+# PROJECT ATLAS - TP-OPTIMIERUNG (POST-TAKE-PROFIT-ANALYSE)
+# ==========================================================
+
+class TpPostAnalysis(Base):
+    """
+    Speichert das Ergebnis der automatischen Rueckblick-
+    Analyse fuer Trades, die per Take-Profit geschlossen
+    wurden: wie weit ist der Preis danach noch guenstig
+    weitergelaufen (Extended MFE), und haette der
+    urspruengliche Stop-Loss dabei zwischenzeitlich
+    (hypothetisch) getroffen?
+    """
+
+    __tablename__ = "tp_post_analysis"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    position_id: Mapped[str] = mapped_column(
+        String(150),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    signal_id: Mapped[str] = mapped_column(
+        String(150),
+        index=True,
+        nullable=False,
+    )
+
+    signal_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    symbol: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False,
+    )
+
+    direction: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+    )
+
+    entry_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    sl_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    tp_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    original_closed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    analyzed_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    sl_would_have_been_hit: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    sl_hit_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    best_price_before_sl: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    extended_mfe_percent_from_entry: Mapped[float] = mapped_column(
+        Float,
         nullable=False,
     )

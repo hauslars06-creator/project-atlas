@@ -1,0 +1,1207 @@
+import asyncio
+import logging
+import time
+import uuid
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from app.notifications.telegram import send_telegram_alert
+from app.database.trade_repository import (
+    create_open_trade,
+    get_open_trades_by_signal,
+)
+from app.database.webhook_queue_repository import enqueue_signal
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.database.signal_repository import get_signal_config
+from app.exchanges.bitunix import BitunixClient
+
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+LIVE_TRADING_ENABLED = True
+EMERGENCY_STOP = False
+
+
+TRADE_LOCKS: dict[str, asyncio.Lock] = {}
+
+SIGNAL_LOCKS: dict[str, asyncio.Lock] = {}
+
+def get_signal_lock(
+    signal_id: str,
+) -> asyncio.Lock:
+    key = signal_id.strip().upper()
+
+    if key not in SIGNAL_LOCKS:
+        SIGNAL_LOCKS[key] = asyncio.Lock()
+
+    return SIGNAL_LOCKS[key]
+
+
+def get_trade_lock(
+    symbol: str,
+    side: str,
+) -> asyncio.Lock:
+    lock_key = f"{symbol}:{side}"
+
+    if lock_key not in TRADE_LOCKS:
+        TRADE_LOCKS[lock_key] = asyncio.Lock()
+
+    return TRADE_LOCKS[lock_key]
+
+
+class TradingViewSignal(BaseModel):
+    signal_id: str
+
+
+async def process_signal(
+    signal_id: str,
+    force_live: bool = False,
+):
+    received_at = time.perf_counter()
+    if EMERGENCY_STOP:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": (
+                    "Project Atlas Emergency Stop ist aktiv. "
+                    "Es werden keine neuen Trades ausgeführt."
+                ),
+                "emergency_stop": True,
+            },
+        )
+
+    signal_id = signal_id.strip().upper()
+    signal = get_signal_config(signal_id)
+
+    if signal is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Unbekannte Signal-ID",
+        )
+
+    if not signal["enabled"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Signal ist deaktiviert",
+        )
+
+    existing_trades = get_open_trades_by_signal(signal_id)
+
+    if existing_trades:
+        raise HTTPException(
+            status_code=409,
+            detail="Signal hat bereits einen offenen Atlas-Trade.",
+        )
+
+    client = BitunixClient()
+
+    symbol = signal["symbol"]
+
+    margin_usdt = Decimal(
+        str(signal["margin_usdt"])
+    )
+
+    leverage = Decimal(
+        str(signal["leverage"])
+    )
+
+    # Aktuelle Marktdaten abrufen
+    ticker_response, pair_response = await asyncio.gather(
+    client.get_ticker(symbol),
+    client.get_trading_pair(symbol),
+    )
+
+    ticker = ticker_response["data"][0]
+    pair = pair_response["data"][0]
+
+    current_price = Decimal(
+        ticker["lastPrice"]
+    )
+
+    base_precision = int(
+        pair["basePrecision"]
+    )
+
+    quote_precision = int(
+        pair["quotePrecision"]
+    )
+
+    min_trade_volume = Decimal(
+        str(pair["minTradeVolume"])
+    )
+
+    # Positionsgröße berechnen
+    position_value = (
+        margin_usdt * leverage
+    )
+
+    raw_qty = (
+        position_value / current_price
+    )
+
+    qty_step = Decimal("1").scaleb(
+        -base_precision
+    )
+
+    qty = raw_qty.quantize(
+        qty_step,
+        rounding=ROUND_DOWN,
+    )
+
+    if qty < min_trade_volume:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Berechnete Menge {qty} liegt "
+                f"unter der Mindestmenge "
+                f"{min_trade_volume}."
+            ),
+        )
+
+    # TP und SL berechnen
+    price_step = Decimal("1").scaleb(
+        -quote_precision
+    )
+
+    tp_percent = (
+        Decimal(
+            str(
+                signal[
+                    "take_profit_percent"
+                ]
+            )
+        )
+        / Decimal("100")
+    )
+
+    sl_percent = (
+        Decimal(
+            str(
+                signal[
+                    "stop_loss_percent"
+                ]
+            )
+        )
+        / Decimal("100")
+    )
+
+    tp2_raw = signal.get(
+        "take_profit_2_percent"
+    )
+
+    tp2_percent = (
+        Decimal(str(tp2_raw))
+        / Decimal("100")
+        if tp2_raw not in (None, "")
+        else None
+    )
+
+    has_tp2 = tp2_percent is not None
+
+    break_even_mode = str(
+        signal.get("break_even_mode")
+        or "OFF"
+    ).strip().upper()
+
+    if not has_tp2:
+        break_even_mode = "OFF"
+
+    direction = signal["direction"]
+    tp2_price = None
+
+    if direction == "LONG":
+        side = "BUY"
+
+        tp_price = (
+            current_price
+            * (
+                Decimal("1")
+                + tp_percent
+            )
+        ).quantize(
+            price_step,
+            rounding=ROUND_DOWN,
+        )
+
+        sl_price = (
+            current_price
+            * (
+                Decimal("1")
+                - sl_percent
+            )
+        ).quantize(
+            price_step,
+            rounding=ROUND_DOWN,
+        )
+
+        if has_tp2:
+            tp2_price = (
+                current_price
+                * (
+                    Decimal("1")
+                    + tp2_percent
+                )
+            ).quantize(
+                price_step,
+                rounding=ROUND_DOWN,
+            )
+
+    elif direction == "SHORT":
+        side = "SELL"
+
+        tp_price = (
+            current_price
+            * (
+                Decimal("1")
+                - tp_percent
+            )
+        ).quantize(
+            price_step,
+            rounding=ROUND_DOWN,
+        )
+
+        sl_price = (
+            current_price
+            * (
+                Decimal("1")
+                + sl_percent
+            )
+        ).quantize(
+            price_step,
+            rounding=ROUND_DOWN,
+        )
+
+        if has_tp2:
+            tp2_price = (
+                current_price
+                * (
+                    Decimal("1")
+                    - tp2_percent
+                )
+            ).quantize(
+                price_step,
+                rounding=ROUND_DOWN,
+            )
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ungültige Handelsrichtung."
+            ),
+        )
+
+    tp1_qty = qty
+    tp2_qty = Decimal("0")
+    runner_qty = Decimal("0")
+
+    if has_tp2:
+        tp1_qty = (
+            qty * Decimal("0.50")
+        ).quantize(
+            qty_step,
+            rounding=ROUND_DOWN,
+        )
+
+        tp2_qty = (
+            qty * Decimal("0.25")
+        ).quantize(
+            qty_step,
+            rounding=ROUND_DOWN,
+        )
+
+        runner_qty = (
+            qty
+            - tp1_qty
+            - tp2_qty
+        ).quantize(
+            qty_step,
+            rounding=ROUND_DOWN,
+        )
+
+        if (
+            tp1_qty < min_trade_volume
+            or tp2_qty < min_trade_volume
+            or runner_qty < min_trade_volume
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Die Position ist für die "
+                    "50/25/25-Aufteilung zu klein. "
+                    f"Gesamtmenge: {qty}, "
+                    f"TP1: {tp1_qty}, "
+                    f"TP2: {tp2_qty}, "
+                    f"Rest: {runner_qty}, "
+                    f"Mindestmenge: {min_trade_volume}."
+                ),
+            )
+
+    print(
+        "\n--- TRADINGVIEW SIGNAL ---"
+    )
+    print(
+        f"Signal:    "
+        f"{signal['display_name']}"
+    )
+    print(f"Symbol:    {symbol}")
+    print(f"Richtung:  {direction}")
+    print(f"Preis:     {current_price}")
+    print(
+        f"Margin:    {margin_usdt} USDT"
+    )
+    print(f"Hebel:     {leverage}x")
+    print(f"Menge:     {qty}")
+    print(f"TP1:       {tp_price}")
+    print(f"TP2:       {tp2_price if has_tp2 else 'AUS'}")
+    print(f"SL:        {sl_price}")
+    print(f"TP1 Menge: {tp1_qty}")
+    print(f"TP2 Menge: {tp2_qty if has_tp2 else 'AUS'}")
+    print(f"Rest:      {runner_qty if has_tp2 else '0'}")
+    print("--------------------------\n")
+
+    # Normale TradingView-Alarme bleiben
+    # blockiert, solange LIVE_TRADING_ENABLED
+    # False ist.
+    should_execute_live = (
+        LIVE_TRADING_ENABLED
+        or force_live
+    )
+
+    if not should_execute_live:
+        processing_time_ms = round(
+            (
+                time.perf_counter()
+                - received_at
+            )
+            * 1000,
+            3,
+        )
+
+        return {
+            "status": "preview",
+            "signal_id": signal_id,
+            "live_order": False,
+            "processing_time_ms": processing_time_ms,
+            "message": "Live-Trading ist deaktiviert.",
+        }
+
+    # Lock für Symbol und Richtung
+    trade_lock = get_trade_lock(
+        symbol,
+        side,
+    )
+
+    async with trade_lock:
+        leverage_result = await client.ensure_leverage(
+            symbol=symbol,
+            leverage=leverage,
+        )
+
+        print(
+            "HEBEL BESTÄTIGT:",
+            symbol,
+            leverage_result["actual_leverage"],
+            leverage_result.get("margin_mode"),
+        )
+
+        # Positionen vor der Order speichern
+        positions_before_response = (
+            await client.get_pending_positions()
+        )
+
+        positions_before = (
+            positions_before_response.get(
+                "data",
+                [],
+            )
+        )
+
+        old_position_ids = {
+            str(position["positionId"])
+            for position in positions_before
+            if position.get("positionId")
+        }
+
+        # Eindeutige Trade-ID
+        client_id = uuid.uuid4().hex
+
+        # Market-Order senden
+        # Bei Netzwerk-/Timeout-Fehler anschließend
+        # über die eindeutige client_id nachprüfen.
+        order_submit_exception = None
+
+
+        try:
+            order_result = (
+                await client.place_order(
+                    symbol=symbol,
+                    qty=str(qty),
+                    side=side,
+                    trade_side="OPEN",
+                    client_id=client_id,
+                )
+            )
+
+        except Exception as exc:
+            order_submit_exception = str(exc)
+            order_result = None
+
+        if order_submit_exception:
+            recovered_order = None
+
+            # Die Order könnte trotz Timeout/Netzwerkfehler
+            # von Bitunix angenommen worden sein.
+            for _ in range(10):
+                await asyncio.sleep(0.2)
+
+                try:
+                    recovery_response = (
+                        await client.get_order_detail(
+                            symbol=symbol,
+                            client_id=client_id,
+                        )
+                    )
+
+                    if (
+                        recovery_response.get("code") == 0
+                        and recovery_response.get("data")
+                    ):
+                        recovered_order = (
+                            recovery_response["data"]
+                        )
+                        break
+
+                except Exception:
+                    pass
+
+            if recovered_order:
+                # Order wurde trotz ursprünglichem
+                # Netzwerkfehler bei Bitunix gefunden.
+                order_result = {
+                    "code": 0,
+                    "data": {
+                        "orderId": recovered_order.get(
+                            "orderId"
+                        ),
+                        "clientId": client_id,
+                    },
+                    "msg": (
+                        "Order recovered after "
+                        "submission exception"
+                    ),
+                }
+
+            else:
+                alert_message = (
+                    "🚨 PROJECT ATLAS – ORDER-SUBMISSION UNKLAR\n\n"
+                    "Beim Senden der Market-Order ist ein "
+                    "technischer Fehler aufgetreten und die "
+                    "Order konnte anschließend auch nicht über "
+                    "die Client-ID gefunden werden.\n\n"
+                    f"Symbol: {symbol}\n"
+                    f"Richtung: {direction}\n"
+                    f"Client ID: {client_id}\n"
+                    f"Menge: {qty}\n"
+                    f"Fehler: {order_submit_exception}\n\n"
+                    "ACHTUNG: Bitte Bitunix sofort prüfen."
+                )
+
+                telegram_sent = await send_telegram_alert(
+                    alert_message
+                )
+
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": (
+                        "Der Status der Order ist nach "
+                        "einem technischen Fehler unklar."
+                        ),
+                        "critical": True,
+                        "client_id": client_id,
+                        "symbol": symbol,
+                        "direction": direction,
+                        "submission_exception": (
+                        order_submit_exception
+                        ),
+                        "telegram_alert_sent": telegram_sent,
+                    },
+                )
+
+        if (
+            order_result.get("code") != 0
+            or not order_result.get("data")
+        ):
+            alert_message = (
+                "🚨 PROJECT ATLAS – ORDER ABGELEHNT\n\n"
+                "Bitunix hat die Market-Order nicht "
+                "erfolgreich angenommen.\n\n"
+                f"Symbol: {symbol}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Menge: {qty}\n"
+                f"Bitunix Code: {order_result.get('code')}\n"
+                f"Meldung: {order_result.get('msg')}"
+            )
+
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": (
+                        "Bitunix hat die Market-Order "
+                        "nicht erfolgreich angenommen."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": symbol,
+                    "direction": direction,
+                    "order_response": order_result,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+        
+        # Genau diese Order als FILLED
+        # bestätigen
+        order_detail = None
+
+        for _ in range(25):
+            await asyncio.sleep(0.1)
+
+            detail_response = (
+                await client.get_order_detail(
+                    symbol=symbol,
+                    client_id=client_id,
+                )
+            )
+
+            detail_data = (
+                detail_response.get("data")
+            )
+
+            if (
+                detail_response.get("code")
+                == 0
+                and detail_data
+                and detail_data.get("status")
+                == "FILLED"
+            ):
+                order_detail = detail_data
+                break
+
+        if not order_detail:
+            alert_message = (
+                "🚨 PROJECT ATLAS – ORDERSTATUS UNKLAR\n\n"
+                "Eine Market-Order wurde an Bitunix gesendet, "
+                "konnte aber nicht eindeutig als FILLED "
+                "bestätigt werden.\n\n"
+                f"Symbol: {symbol}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Menge: {qty}\n\n"
+                "ACHTUNG: Bitte Bitunix sofort prüfen. "
+                "Die Order könnte trotzdem ausgeführt worden sein."
+            )
+
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": (
+                        "Die Order wurde gesendet, konnte "
+                        "aber nicht eindeutig als FILLED "
+                        "bestätigt werden. Bitunix muss "
+                        "manuell geprüft werden."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": symbol,
+                    "direction": direction,
+                    "order_response": order_result,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+
+        # Neue Position suchen
+        new_position = None
+
+        for _ in range(25):
+            await asyncio.sleep(0.1)
+
+            positions_after_response = (
+                await client
+                .get_pending_positions()
+            )
+
+            positions_after = (
+                positions_after_response.get(
+                    "data",
+                    [],
+                )
+            )
+
+            candidates = []
+
+            for position in positions_after:
+                position_id = str(
+                    position.get(
+                        "positionId",
+                        "",
+                    )
+                )
+
+                if (
+                    position_id
+                    and position_id
+                    not in old_position_ids
+                    and position.get(
+                        "symbol"
+                    )
+                    == symbol
+                    and position.get(
+                        "side"
+                    )
+                    == side
+                ):
+                    candidates.append(
+                        position
+                    )
+
+            if len(candidates) == 1:
+                new_position = (
+                    candidates[0]
+                )
+                break
+
+        if not new_position:
+            alert_message = (
+                "🚨 PROJECT ATLAS – POSITION NICHT ZUGEORDNET\n\n"
+                "Eine Order wurde als FILLED bestätigt, "
+                "aber die neue Position konnte nicht "
+                "eindeutig gefunden werden.\n\n"
+                f"Symbol: {symbol}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Order ID: {order_detail.get('orderId')}\n"
+                f"Menge: {qty}\n\n"
+                "ACHTUNG: Bitte Bitunix sofort prüfen. "
+                "Es könnte eine Position ohne TP/SL offen sein."
+            )
+
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": (
+                        "Order wurde ausgeführt, aber die "
+                        "neue Position konnte nicht eindeutig "
+                        "zugeordnet werden. Bitunix muss "
+                        "manuell geprüft werden."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": symbol,
+                    "direction": direction,
+                    "order_detail": order_detail,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+
+        position_id = str(
+            new_position["positionId"]
+        )
+
+        actual_leverage_raw = (
+            new_position.get("leverage")
+        )
+
+        actual_leverage = (
+            Decimal(str(actual_leverage_raw))
+            if actual_leverage_raw not in (None, "")
+            else None
+        )
+
+        leverage_mismatch = (
+            actual_leverage is not None
+            and actual_leverage != leverage
+        )
+
+        if leverage_mismatch:
+            alert_message = (
+                "⚠️ PROJECT ATLAS – LEVERAGE MISMATCH\n\n"
+                f"Signal: {signal['display_name']}\n"
+                f"Symbol: {symbol}\n"
+                f"Richtung: {direction}\n"
+                f"Erwartet: {leverage}x\n"
+                f"BitUnix: {actual_leverage}x\n"
+                f"Position ID: {position_id}\n\n"
+                "Die Position wurde mit einem anderen "
+                "Hebel als im Atlas-Signal eröffnet."
+            )
+
+            await send_telegram_alert(
+                alert_message
+            )
+
+        # ==================================================
+        # TP/SL AUF TATSÄCHLICHEM BITUNIX ENTRY BERECHNEN
+        # ==================================================
+        #
+        # Die Vorberechnung weiter oben basiert auf dem
+        # Tickerpreis vor Ausführung der Market-Order.
+        # Für eine echte Position muss dagegen der tatsächlich
+        # ausgeführte durchschnittliche Entry verwendet werden.
+        #
+        entry_price_value = (
+            new_position.get("avgOpenPrice")
+            or new_position.get("entryPrice")
+            or new_position.get("avgPrice")
+            or order_detail.get("avgPrice")
+        )
+
+        entry_price_fallback = False
+
+        if entry_price_value in (None, ""):
+            entry_price_fallback = True
+
+            # Fallback:
+            # Position NICHT schließen.
+            #
+            # TP/SL wurden weiter oben bereits auf Basis
+            # des letzten bekannten Tickerpreises berechnet.
+            # Diese Werte bleiben bestehen und werden als
+            # Schutz für die offene Position verwendet.
+            actual_entry_price = current_price
+
+            await send_telegram_alert(
+                "🟠 PROJECT ATLAS – "
+                "ENTRY-PREIS FALLBACK\n\n"
+                "Die Position wurde eröffnet, aber der "
+                "tatsächliche BitUnix-Entry konnte nicht "
+                "ermittelt werden.\n\n"
+                f"Signal: {signal['display_name']}\n"
+                f"Symbol: {symbol}\n"
+                f"Richtung: {direction}\n"
+                f"Position ID: {position_id}\n"
+                f"Fallback-Referenz: {current_price}\n"
+                f"TP: {tp_price}\n"
+                f"SL: {sl_price}\n\n"
+                "Die Position bleibt geöffnet. "
+                "Atlas verwendet die zuletzt berechneten "
+                "TP/SL-Werte als Schutz."
+            )
+
+        else:
+            actual_entry_price = Decimal(
+                str(entry_price_value)
+            )
+
+            if direction == "LONG":
+                tp_price = (
+                    actual_entry_price
+                    * (
+                        Decimal("1")
+                        + tp_percent
+                    )
+                ).quantize(
+                    price_step,
+                    rounding=ROUND_HALF_UP,
+                )
+
+                sl_price = (
+                    actual_entry_price
+                    * (
+                        Decimal("1")
+                        - sl_percent
+                    )
+                ).quantize(
+                    price_step,
+                    rounding=ROUND_HALF_UP,
+                )
+
+                if has_tp2:
+                    tp2_price = (
+                        actual_entry_price
+                        * (
+                            Decimal("1")
+                            + tp2_percent
+                        )
+                    ).quantize(
+                        price_step,
+                        rounding=ROUND_HALF_UP,
+                    )
+
+            else:
+                tp_price = (
+                    actual_entry_price
+                    * (
+                        Decimal("1")
+                        - tp_percent
+                    )
+                ).quantize(
+                    price_step,
+                    rounding=ROUND_HALF_UP,
+                )
+
+                sl_price = (
+                    actual_entry_price
+                    * (
+                        Decimal("1")
+                        + sl_percent
+                    )
+                ).quantize(
+                    price_step,
+                    rounding=ROUND_HALF_UP,
+                )
+
+                if has_tp2:
+                    tp2_price = (
+                        actual_entry_price
+                        * (
+                            Decimal("1")
+                            - tp2_percent
+                        )
+                    ).quantize(
+                        price_step,
+                        rounding=ROUND_HALF_UP,
+                    )
+
+        print(
+            "ACTUAL ENTRY TP2",
+            tp2_price if has_tp2 else "AUS",
+        )
+
+        print(
+            "TP/SL ACTUAL ENTRY:",
+            symbol,
+            direction,
+            "entry=",
+            actual_entry_price,
+            "tp=",
+            tp_price,
+            "sl=",
+            sl_price,
+        )
+
+        # TP-/SL-Aufträge setzen.
+        #
+        # Ohne TP2:
+        # - bestehender Positions-TP/SL für 100 %
+        #
+        # Mit TP2:
+        # - TP1: 50 %
+        # - TP2: 25 %
+        # - 25 % Restposition
+        # - Positions-SL schützt immer die aktuell
+        #   verbleibende Gesamtposition.
+        tpsl_result = None
+        tpsl_success = False
+
+    if not has_tp2:
+        for attempt in range(1, 4):
+            try:
+                tpsl_result = await client.place_position_tpsl(
+                    symbol=symbol,
+                    position_id=position_id,
+                    tp_price=str(tp_price),
+                    sl_price=str(sl_price),
+                )
+
+                print(
+                    "BITUNIX TP/SL RESPONSE:",
+                    tpsl_result,
+                )
+
+                if (
+                    str(tpsl_result.get("code")) == "0"
+                    and tpsl_result.get("data")
+                ):
+                    tpsl_success = True
+                    break
+
+            except Exception as exc:
+                tpsl_result = {
+                    "code": "exception",
+                    "msg": str(exc),
+                }
+
+            if attempt < 3:
+                await asyncio.sleep(0.25)
+
+    else:
+        multi_results = {
+            "code": 0,
+            "data": {},
+            "orders": [],
+        }
+
+        try:
+            tp1_result = await client.place_tpsl_order(
+                symbol=symbol,
+                position_id=position_id,
+                tp_price=str(tp_price),
+                tp_qty=str(tp1_qty),
+            )
+
+            tp2_result = await client.place_tpsl_order(
+                symbol=symbol,
+                position_id=position_id,
+                tp_price=str(tp2_price),
+                tp_qty=str(tp2_qty),
+            )
+
+            sl_result = await client.place_position_sl(
+                symbol=symbol,
+                position_id=position_id,
+                sl_price=str(sl_price),
+            )
+
+            multi_results["data"] = {
+                "tp1_order_id": tp1_result.get("data", {}).get("orderId"),
+                "tp2_order_id": tp2_result.get("data", {}).get("orderId"),
+                "sl_order_id": sl_result.get("data", {}).get("orderId"),
+            }
+
+            tpsl_result = multi_results
+
+            tp1_id = multi_results["data"].get("tp1_order_id")
+            tp2_id = multi_results["data"].get("tp2_order_id")
+            sl_id = multi_results["data"].get("sl_order_id")
+
+            tp1_exchange_order_id = tp1_id
+            tp2_exchange_order_id = tp2_id
+            sl_exchange_order_id = sl_id
+
+            tpsl_success = bool(
+                tp1_id
+                and sl_id
+            )
+
+            logger.info(
+                "TPSL VALIDATION | symbol=%s position=%s TP1=%s TP2=%s SL=%s success=%s",
+                symbol,
+                position_id,
+                tp1_id,
+                tp2_id,
+                sl_id,
+                tpsl_success,
+            )
+
+        except Exception as exc:
+            tpsl_result = {
+                "code": "exception",
+                "msg": str(exc),
+            }
+            tpsl_success = False
+
+    if not tpsl_success:
+        logger.error(
+            "ATLAS BLOCK SAVE WITHOUT TP/SL | %s | %s",
+            symbol,
+            position_id,
+        )
+
+        try:
+            await client.flash_close_position(
+                position_id=position_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "FAILSAFE CLOSE FAILED: %s",
+                exc,
+            )
+
+        return {
+            "status": "error",
+            "message": "Trade wegen fehlendem TP/SL verworfen",
+            "position_id": position_id,
+        }
+
+    stored_trade = create_open_trade(
+            position_id=position_id,
+            signal_id=signal_id,
+            signal_name=signal["display_name"],
+            symbol=symbol,
+            timeframe=(
+                signal.get("timeframe")
+                or "UNKNOWN"
+            ),
+            direction=direction,
+            entry_price=float(entry_price_value),
+            tp_price=float(tp_price),
+            sl_price=float(sl_price),
+            margin_usdt=float(margin_usdt),
+            leverage=int(leverage),
+            quantity=float(qty),
+            client_id=client_id,
+            order_id=(
+                str(order_id)
+                if order_id is not None
+                else None
+            ),
+            tp1_order_id=tp1_exchange_order_id,
+            tp2_order_id=tp2_exchange_order_id,
+            sl_order_id=sl_exchange_order_id,
+            tp2_price=float(tp2_price) if has_tp2 else None,
+            tp1_quantity=float(tp1_qty) if has_tp2 else float(qty),
+            tp2_quantity=float(tp2_qty) if has_tp2 else None,
+            runner_quantity=float(runner_qty) if has_tp2 else None,
+            break_even_mode=break_even_mode if has_tp2 else "OFF",
+        )
+
+    database_saved = stored_trade is not None
+
+    processing_time_ms = round(
+        (
+            time.perf_counter()
+            - received_at
+        )
+        * 1000,
+        3,
+    )
+
+    return {
+        "status": "trade_executed",
+        "signal_id": signal_id,
+        "client_id": client_id,
+        "live_order": True,
+        "symbol": symbol,
+        "direction": direction,
+        "position_id": position_id,
+        "database_saved": database_saved,
+        "margin_usdt": str(margin_usdt),
+        "leverage": str(leverage),
+        "qty": str(qty),
+        "tp_price": str(tp_price),
+        "tp2_price": (
+            str(tp2_price)
+            if has_tp2
+            else None
+        ),
+        "tp1_quantity": str(tp1_qty),
+        "tp2_quantity": (
+            str(tp2_qty)
+            if has_tp2
+            else None
+        ),
+        "runner_quantity": (
+            str(runner_qty)
+            if has_tp2
+            else None
+        ),
+        "break_even_mode": break_even_mode,
+        "sl_price": str(sl_price),
+        "order_response": order_result,
+        "order_detail": order_detail,
+        "position_tpsl_response": tpsl_result,
+        "processing_time_ms": processing_time_ms,
+    }
+
+
+@router.post(
+    "/tradingview",
+    status_code=202,
+)
+async def receive_tradingview_signal(
+    payload: TradingViewSignal,
+):
+    signal_id = payload.signal_id.strip().upper()
+
+    if EMERGENCY_STOP:
+        raise HTTPException(
+            status_code=503,
+            detail="Project Atlas Emergency Stop ist aktiv.",
+        )
+
+    signal = get_signal_config(signal_id)
+
+    if signal is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Unbekannte Signal-ID",
+        )
+
+    if not signal["enabled"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Signal ist deaktiviert",
+        )
+
+    # Schutz gegen doppelte TradingView Alerts
+    existing = get_pending_queue_signals()
+
+    if signal_id in existing:
+        return {
+            "status": "already_queued",
+            "signal_id": signal_id,
+            "message": "Signal bereits in Verarbeitung",
+        }
+
+    item = enqueue_signal(signal_id)
+
+    return {
+        "status": "accepted",
+        "queue_id": item.id,
+        "signal_id": signal_id,
+        "queue_status": item.status,
+    }
+
+
+@router.get("/test-lock")
+async def test_trade_lock():
+    lock = get_trade_lock(
+        "BTCUSDT",
+        "BUY",
+    )
+
+    events = []
+
+    async def simulated_trade(
+        name: str,
+    ):
+        requested_at = time.perf_counter()
+
+        async with lock:
+            started_at = time.perf_counter()
+
+            events.append({
+                "trade": name,
+                "event": "started",
+                "wait_ms": round(
+                    (
+                        started_at
+                        - requested_at
+                    )
+                    * 1000,
+                    2,
+                ),
+            })
+
+            await asyncio.sleep(1)
+
+            events.append({
+                "trade": name,
+                "event": "finished",
+            })
+
+    await asyncio.gather(
+        simulated_trade("trade_1"),
+        simulated_trade("trade_2"),
+    )
+
+    return {
+        "status": "lock_test_complete",
+        "events": events,
+    }

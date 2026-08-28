@@ -3,8 +3,17 @@ from decimal import Decimal, ROUND_DOWN
 from fastapi import FastAPI
 import asyncio
 from app.api.webhook import router as webhook_router
+from app.admin.routes import router as admin_router
 from app.exchanges.bitunix import BitunixClient
-
+from app.api.v1.router import router as api_v1_router
+from app.trade_sync import trade_sync_loop
+from app.webhook_worker import webhook_worker_loop
+from app.security_monitor import security_monitor_loop
+from app.sl_analysis import sl_analysis_loop
+from app.tp_analysis import tp_analysis_loop
+from app.database.trade_repository import create_open_trade
+from app.database.database import init_database
+from app.database.webhook_queue_repository import recover_processing_items
 
 app = FastAPI(
     title="Project Atlas",
@@ -17,6 +26,89 @@ app.include_router(
     prefix="/webhook",
     tags=["TradingView"],
 )
+
+
+app.include_router(
+    admin_router,
+    tags=["Admin"],
+)
+app.include_router(api_v1_router)
+
+trade_sync_task: asyncio.Task | None = None
+webhook_worker_task: asyncio.Task | None = None
+security_monitor_task: asyncio.Task | None = None
+sl_analysis_task: asyncio.Task | None = None
+
+
+@app.on_event("startup")
+async def startup_event():
+    global trade_sync_task, webhook_worker_task, security_monitor_task
+    global sl_analysis_task
+
+    init_database()
+
+    recovered = recover_processing_items()
+    if recovered:
+        print(f"Webhook Queue Recovery: {recovered} Job(s)")
+
+    trade_sync_task = asyncio.create_task(
+        trade_sync_loop(),
+        name="project-atlas-trade-sync",
+    )
+
+    webhook_worker_task = asyncio.create_task(
+        webhook_worker_loop(),
+        name="project-atlas-webhook-worker",
+    )
+
+    security_monitor_task = asyncio.create_task(
+        security_monitor_loop(),
+        name="project-atlas-security-monitor",
+    )
+
+    sl_analysis_task = asyncio.create_task(
+        sl_analysis_loop(),
+        name="project-atlas-sl-analysis",
+    )
+
+    tp_analysis_task = asyncio.create_task(
+        tp_analysis_loop(),
+        name="project-atlas-tp-analysis",
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global trade_sync_task, webhook_worker_task, security_monitor_task
+    global sl_analysis_task
+
+    tasks = [
+        trade_sync_task,
+        webhook_worker_task,
+        security_monitor_task,
+        sl_analysis_task,
+    ]
+
+    for task in tasks:
+        if task is not None:
+            task.cancel()
+
+    for task in tasks:
+        if task is not None:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    from app.trade_sync import shared_bitunix_client
+
+    if shared_bitunix_client is not None:
+        await shared_bitunix_client.aclose()
+
+    trade_sync_task = None
+    webhook_worker_task = None
+    security_monitor_task = None
+    sl_analysis_task = None
 
 
 @app.get("/")
@@ -228,6 +320,22 @@ async def bitunix_test_live_order(confirm: str):
         position_id=position_id,
         tp_price=str(tp_price),
         sl_price=str(sl_price),
+    )
+    create_open_trade(
+        position_id=position_id,
+        signal_id="BTC_15M_BULLISH_DIVERGENCE_REGULAR",
+        signal_name="BTC 15 min Bullish Divergence Regular",
+        symbol=symbol,
+        timeframe="15M",
+        direction="LONG",
+        entry_price=float(current_price),
+        tp_price=float(tp_price),
+        sl_price=float(sl_price),
+        margin_usdt=float(margin_usdt),
+        leverage=int(leverage),
+        quantity=float(qty),
+        client_id=order_result["data"].get("clientId"),
+        order_id=order_result["data"].get("orderId"),
     )
 
     return {

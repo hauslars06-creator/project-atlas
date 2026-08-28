@@ -6,6 +6,9 @@ services:
     env_file:
       - .env
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     volumes:
       - ./data:/app/data
+      - ./:/host_project:ro
+      - ./app:/app/app
+      - ./main.py:/app/main.py

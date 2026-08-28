@@ -1,4 +1,4 @@
-from app.config.signals import SIGNALS
+from app.config.signals_legacy import SIGNALS
 from app.database.database import SessionLocal, init_database
 from app.database.models import Signal
 
