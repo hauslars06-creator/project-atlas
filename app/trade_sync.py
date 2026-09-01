@@ -640,6 +640,13 @@ async def synchronize_open_trades(
     archived_positions: list[str] = []
 
     for trade in atlas_trades:
+        # Dieser Sync-Job vergleicht ausschliesslich gegen
+        # Bitunix-Positionen. Trades anderer Boersen (z.B.
+        # Blofin) wuerden sonst faelschlich als "bei Bitunix
+        # nicht mehr vorhanden" interpretiert und archiviert.
+        if str(getattr(trade, "exchange", "BITUNIX") or "BITUNIX").strip().upper() != "BITUNIX":
+            continue
+
         position_id = str(trade.position_id)
 
         if position_id in bitunix_position_ids:
