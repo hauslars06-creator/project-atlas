@@ -308,10 +308,17 @@ class BlofinClient:
         position_id: str | None = None,
         client_order_id: str | None = None,
     ) -> dict[str, Any]:
+        # "side" ist bei Blofin die SCHLIESSENDE Richtung:
+        # eine Long-Position wird durch "sell" geschlossen,
+        # eine Short-Position durch "buy". Pflichtfeld, ohne
+        # das Blofin mit Code 152001 ablehnt.
+        closing_side = "sell" if position_side == "long" else "buy"
+
         payload: dict[str, Any] = {
             "instId": inst_id,
             "marginMode": margin_mode,
             "positionSide": position_side,
+            "side": closing_side,
             "size": size,
         }
 
