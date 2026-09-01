@@ -5419,6 +5419,22 @@ tr.atlas-timeframe-row-daily
         </div>
     </div>
 
+    <div
+        class="atlas-kpi-switcher"
+        id="atlas-exchange-scope-switcher"
+        style="margin-bottom: 8px;"
+    >
+        <button type="button" data-exchange="ALL" class="active">
+            Alle
+        </button>
+        <button type="button" data-exchange="BITUNIX">
+            Bitunix
+        </button>
+        <button type="button" data-exchange="BLOFIN">
+            Blofin
+        </button>
+    </div>
+
     <section
         id="atlas-reference-kpis"
         class="atlas-reference-kpis"
@@ -5813,9 +5829,7 @@ tr.atlas-timeframe-row-daily
                     </label>
 
                     <select
-                        id="symbol"
-                        name="symbol"
-                        required
+                        id="symbol_crypto"
                         style="
                             width: 100%;
                             margin-top: 8px;
@@ -5826,40 +5840,93 @@ tr.atlas-timeframe-row-daily
                             color: white;
                         "
                     >
-                        <option value="BTCUSDT">BTCUSDT</option>
-                        <option value="ETHUSDT">ETHUSDT</option>
-                        <option value="SOLUSDT">SOLUSDT</option>
-                        <option value="XRPUSDT">XRPUSDT</option>
-                        <option value="BNBUSDT">BNBUSDT</option>
-                        <option value="LINKUSDT">LINKUSDT</option>
-                        <option value="SUIUSDT">SUIUSDT</option>
-                        <option value="SEIUSDT">SEIUSDT</option>
-                        <option value="ONDOUSDT">ONDOUSDT</option>
-                        <option value="AAVEUSDT">AAVEUSDT</option>
-                        <option value="DOGEUSDT">DOGEUSDT</option>
-                        <option value="ALGOUSDT">ALGOUSDT</option>
-                        <option value="AVAXUSDT">AVAXUSDT</option>
-                        <option value="ADAUSDT">ADAUSDT</option>
-                        <option value="HYPEUSDT">HYPEUSDT</option>
-                        <option value="NEARUSDT">NEARUSDT</option>
-                        <option value="TRXUSDT">TRXUSDT</option>
-                        <option value="BCHUSDT">BCHUSDT</option>
-                        <option value="ZECUSDT">ZECUSDT</option>
-                        <option value="DOGEUSDT">DOGEUSDT</option>
-                        <option value="LTCUSDT">LTCUSDT</option>
-                        <option value="UNIUSDT">UNIUSDT</option>
-                        <option value="NVDAUSDT">NVDAUSDT</option>
-                        <option value="METAUSDT">METAUSDT</option>
-                        <option value="TSLAUSDT">TSLAUSDT</option>
-                        <option value="AMZNUSDT">AMZNUSDT</option>
-                        <option value="GOOGLUSDT">GOOGLUSDT</option>
-                        <option value="AMDUSDT">AMDUSDT</option>
-                        <option value="SAMSUNGUSDT">SAMSUNGUSDT</option>
-                        <option value="INTCUSDT">INTCUSDT</option>
-                        <option value="MSFTUSDT">MSFTUSDT</option>
-                        <option value="APPLUSDT">APPLUSDT</option>
-                        <option value="PYPLUSDT">PYPLUSDT</option>
+                        <option value="">-- Krypto wählen --</option>
+                            <option value="BTCUSDT">BTCUSDT</option>
+                            <option value="ETHUSDT">ETHUSDT</option>
+                            <option value="SOLUSDT">SOLUSDT</option>
+                            <option value="XRPUSDT">XRPUSDT</option>
+                            <option value="BNBUSDT">BNBUSDT</option>
+                            <option value="LINKUSDT">LINKUSDT</option>
+                            <option value="SUIUSDT">SUIUSDT</option>
+                            <option value="SEIUSDT">SEIUSDT</option>
+                            <option value="ONDOUSDT">ONDOUSDT</option>
+                            <option value="AAVEUSDT">AAVEUSDT</option>
+                            <option value="DOGEUSDT">DOGEUSDT</option>
+                            <option value="ALGOUSDT">ALGOUSDT</option>
+                            <option value="AVAXUSDT">AVAXUSDT</option>
+                            <option value="ADAUSDT">ADAUSDT</option>
+                            <option value="HYPEUSDT">HYPEUSDT</option>
+                            <option value="NEARUSDT">NEARUSDT</option>
+                            <option value="TRXUSDT">TRXUSDT</option>
+                            <option value="BCHUSDT">BCHUSDT</option>
+                            <option value="ZECUSDT">ZECUSDT</option>
+                            <option value="LTCUSDT">LTCUSDT</option>
+                            <option value="UNIUSDT">UNIUSDT</option>
                     </select>
+
+                    </div>
+
+                    <div>
+                        <label for="symbol_stocks">
+                            Symbol (Aktien-Futures)
+                        </label>
+                        <select
+                        id="symbol_stocks"
+                        style="
+                                width: 100%;
+                                margin-top: 8px;
+                                padding: 12px;
+                                border: 1px solid #475569;
+                                border-radius: 6px;
+                                background: #0f172a;
+                                color: white;
+                            "
+                    >
+                            <option value="">-- Aktie wählen --</option>
+                                <option value="PYPLUSDT">PYPLUSDT</option>
+                                <option value="METAUSDT">METAUSDT</option>
+                                <option value="TSLAUSDT">TSLAUSDT</option>
+                                <option value="NVDAUSDT">NVDAUSDT</option>
+                                <option value="AMZNUSDT">AMZNUSDT</option>
+                                <option value="MSFTUSDT">MSFTUSDT</option>
+                                <option value="AMDUSDT">AMDUSDT</option>
+                                <option value="GOOGLUSDT">GOOGLUSDT</option>
+                                <option value="AAPLUSDT">AAPLUSDT</option>
+                                <option value="HOODUSDT">HOODUSDT</option>
+                                <option value="CRCLUSDT">CRCLUSDT</option>
+                                <option value="AVGOUSDT">AVGOUSDT</option>
+                    </select>
+
+                        <input
+                            type="hidden"
+                            id="symbol"
+                            name="symbol"
+                            required
+                        >
+
+                        <script>
+                        document.addEventListener("DOMContentLoaded", function () {
+                            var cryptoSelect = document.getElementById("symbol_crypto");
+                            var stockSelect = document.getElementById("symbol_stocks");
+                            var hiddenSymbol = document.getElementById("symbol");
+                            if (cryptoSelect) {
+                                cryptoSelect.addEventListener("change", function () {
+                                    if (cryptoSelect.value) {
+                                        if (stockSelect) stockSelect.value = "";
+                                        hiddenSymbol.value = cryptoSelect.value;
+                                    }
+                                });
+                            }
+                            if (stockSelect) {
+                                stockSelect.addEventListener("change", function () {
+                                    if (stockSelect.value) {
+                                        if (cryptoSelect) cryptoSelect.value = "";
+                                        hiddenSymbol.value = stockSelect.value;
+                                    }
+                                });
+                            }
+                        });
+                        </script>
                 </div>
 
                 <div>
@@ -11824,6 +11891,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
 <script id="project-atlas-clean-dark-upgrade">
 document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener(
+        "atlas-exchange-scope-changed",
+        function () {
+            loadReferenceStatistics();
+        }
+    );
+
     const elements = {
         pnl: document.getElementById(
             "atlas-reference-pnl"
@@ -11989,10 +12063,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     async function fetchReferenceStatistics(period) {
+        const exchangeScope =
+            window.atlasExchangeScope || "ALL";
+        const exchangeParam =
+            exchangeScope !== "ALL"
+                ? "&exchange=" + encodeURIComponent(exchangeScope)
+                : "";
         const response = await fetch(
             "/api/v1/statistics/summary"
             + "?period="
-            + encodeURIComponent(period),
+            + encodeURIComponent(period)
+            + exchangeParam,
             {
                 cache: "no-store",
                 headers: {
@@ -13238,7 +13319,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 
-    function rowHtml(trade, external) {
+    function rowHtml(trade, external, showExchange) {
         const values = tradeValues(trade);
 
         const positionId = String(
@@ -13300,6 +13381,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 <td>
                     ${escapeHtml(trade.symbol ?? "–")}
                 </td>
+
+                ${
+                    showExchange
+                        ? `
+                            <td>
+                                <span class="atlas-exchange-badge">
+                                    ${escapeHtml(trade.exchange ?? "BITUNIX")}
+                                </span>
+                            </td>
+                        `
+                        : ""
+                }
 
                 <td>
                     <span class="
@@ -13455,7 +13548,7 @@ document.addEventListener("DOMContentLoaded", function () {
         `;
     }
 
-    function tableHtml(trades, external) {
+    function tableHtml(trades, external, tableKeyOverride) {
         if (!trades.length) {
             return `
                 <div class="atlas-empty">
@@ -13468,12 +13561,15 @@ document.addEventListener("DOMContentLoaded", function () {
             `;
         }
 
-        const tableKey = external ? "locked" : "active";
+        const tableKey = tableKeyOverride || (external ? "locked" : "active");
         const sortedTrades = sortTradesForTable(trades, tableKey);
+        const showExchange = tableKey === "active-stocks";
 
         const colWidths = external
             ? [2.79, 23.42, 6.51, 6.05, 5.00, 3.00, 3.00, 9.77, 9.77, 6.51, 4.19, 5.12, 5.58, 4.65, 4.65]
-            : [2.88, 21.21, 6.25, 5.77, 4.81, 5.00, 3.00, 3.00, 9.62, 9.62, 6.25, 3.85, 4.81, 5.29, 4.33, 4.33];
+            : showExchange
+                ? [2.88, 16.21, 6.25, 5.00, 5.77, 4.81, 5.00, 3.00, 3.00, 9.62, 9.62, 6.25, 3.85, 4.81, 5.29, 4.33, 4.33]
+                : [2.88, 21.21, 6.25, 5.77, 4.81, 5.00, 3.00, 3.00, 9.62, 9.62, 6.25, 3.85, 4.81, 5.29, 4.33, 4.33];
 
         const colgroupHtml = colWidths.map(
             function (w) {
@@ -13490,6 +13586,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             <th class="atlas-leading-column"></th>
                             ${sortableTh(tableKey, "signal", "Signal")}
                             ${sortableTh(tableKey, "symbol", "Symbol")}
+                            ${showExchange ? "<th>Börse</th>" : ""}
                             ${sortableTh(tableKey, "direction", "Richtung")}
                             ${
                                 external
@@ -13516,7 +13613,8 @@ document.addEventListener("DOMContentLoaded", function () {
                                 function (trade) {
                                     return rowHtml(
                                         trade,
-                                        external
+                                        external,
+                                        showExchange
                                     );
                                 }
                             ).join("")
@@ -13525,6 +13623,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 </table>
             </div>
         `;
+    }
+
+    const ATLAS_STOCK_SYMBOLS = [
+        "PYPLUSDT", "METAUSDT", "TSLAUSDT", "NVDAUSDT", "AMZNUSDT",
+        "MSFTUSDT", "AMDUSDT", "GOOGLUSDT", "AAPLUSDT", "HOODUSDT",
+        "CRCLUSDT", "AVGOUSDT"
+    ];
+
+    function isStock(trade) {
+        return ATLAS_STOCK_SYMBOLS.includes(
+            String(trade.symbol || "").toUpperCase()
+        );
     }
 
     function dashboardHtml(trades) {
@@ -13538,15 +13648,44 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         );
 
-        const selectable = atlasTrades.filter(
+        const cryptoTrades = atlasTrades.filter(
+            function (trade) {
+                return !isStock(trade);
+            }
+        );
+
+        const stockTrades = atlasTrades.filter(
+            isStock
+        );
+
+        const cryptoSelectable = cryptoTrades.filter(
+            function (trade) {
+                return !Boolean(trade.is_locked);
+            }
+        );
+
+        const stockSelectable = stockTrades.filter(
             function (trade) {
                 return !Boolean(trade.is_locked);
             }
         );
 
         const allSelected = (
-            selectable.length > 0
-            && selectable.every(
+            cryptoSelectable.length > 0
+            && cryptoSelectable.every(
+                function (trade) {
+                    return state.selected.has(
+                        String(
+                            trade.position_id ?? ""
+                        )
+                    );
+                }
+            )
+        );
+
+        const allStocksSelected = (
+            stockSelectable.length > 0
+            && stockSelectable.every(
                 function (trade) {
                     return state.selected.has(
                         String(
@@ -13597,12 +13736,12 @@ document.addEventListener("DOMContentLoaded", function () {
                             ${icon("signal")}
 
                             <span>
-                                AKTIVE TRADES
+                                AKTIVE TRADES - KRYPTO
                                 (AUTOMATISCH ÜBER SIGNALE)
                             </span>
 
                             <span class="atlas-count">
-                                ${atlasTrades.length}
+                                ${cryptoTrades.length}
                             </span>
                         </div>
 
@@ -13617,7 +13756,7 @@ document.addEventListener("DOMContentLoaded", function () {
                                             : ""
                                     }
                                     ${
-                                        selectable.length
+                                        cryptoSelectable.length
                                             ? ""
                                             : "disabled"
                                     }
@@ -13669,7 +13808,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         </div>
                     </header>
 
-                    ${tableHtml(atlasTrades, false)}
+                    ${tableHtml(cryptoTrades, false)}
 
                     <footer class="atlas-panel-footer">
                         <button
@@ -13680,7 +13819,121 @@ document.addEventListener("DOMContentLoaded", function () {
                             "
                             data-action="close-all"
                             ${
-                                atlasTrades.length
+                                cryptoTrades.length
+                                    ? ""
+                                    : "disabled"
+                            }
+                        >
+                            Alle schließen
+                            (außer gesperrte)
+                        </button>
+
+                        <button
+                            type="button"
+                            class="
+                                atlas-footer-button
+                                atlas-update
+                            "
+                            data-action="refresh"
+                        >
+                            Aktualisieren
+                        </button>
+                    </footer>
+                </section>
+
+                <section class="atlas-trade-panel">
+                    <header class="atlas-panel-header">
+                        <div class="
+                            atlas-panel-title
+                            atlas-signal-title
+                        ">
+                            ${icon("signal")}
+
+                            <span>
+                                AKTIVE TRADES - AKTIEN-FUTURES
+                                (AUTOMATISCH ÜBER SIGNALE)
+                            </span>
+
+                            <span class="atlas-count">
+                                ${stockTrades.length}
+                            </span>
+                        </div>
+
+                        <div class="atlas-panel-tools">
+                            <label class="atlas-select-all">
+                                <input
+                                    type="checkbox"
+                                    id="atlas-select-all-trades-stocks"
+                                    ${
+                                        allStocksSelected
+                                            ? "checked"
+                                            : ""
+                                    }
+                                    ${
+                                        stockSelectable.length
+                                            ? ""
+                                            : "disabled"
+                                    }
+                                >
+
+                                <span>Alle auswählen</span>
+                            </label>
+
+                            <button
+                                type="button"
+                                class="
+                                    atlas-toolbar-button
+                                    atlas-margin-toolbar
+                                "
+                                data-action="margin-info"
+                            >
+                                ${icon("plus")}
+                                Margin +
+                            </button>
+
+                            <button
+                                type="button"
+                                class="
+                                    atlas-toolbar-button
+                                    atlas-tpsl-toolbar
+                                "
+                                data-action="bulk-tpsl"
+                                ${
+                                    state.selected.size
+                                        ? ""
+                                        : "disabled"
+                                }
+                            >
+                                ${icon("edit")}
+                                TP/SL anpassen
+                            </button>
+
+                            <button
+                                type="button"
+                                class="
+                                    atlas-toolbar-button
+                                    atlas-refresh-button
+                                "
+                                data-action="refresh"
+                                title="Aktualisieren"
+                            >
+                                ${icon("refresh")}
+                            </button>
+                        </div>
+                    </header>
+
+                    ${tableHtml(stockTrades, false, "active-stocks")}
+
+                    <footer class="atlas-panel-footer">
+                        <button
+                            type="button"
+                            class="
+                                atlas-footer-button
+                                atlas-close-all
+                            "
+                            data-action="close-all"
+                            ${
+                                stockTrades.length
                                     ? ""
                                     : "disabled"
                             }
@@ -14052,52 +14305,87 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function syncSelectionControls() {
-        const bulk = document.querySelector(
+        const bulkButtons = document.querySelectorAll(
             '[data-action="bulk-tpsl"]'
         );
 
-        if (bulk) {
+        bulkButtons.forEach(function (bulk) {
             bulk.disabled = (
                 state.selected.size === 0
             );
-        }
+        });
 
-        const selectAll = document.getElementById(
-            "atlas-select-all-trades"
-        );
-
-        if (!selectAll) {
-            return;
-        }
-
-        const selectable = Array.from(
+        const cryptoSelectable = Array.from(
             state.trades.values()
         ).filter(
             function (trade) {
                 return (
                     !isExternal(trade)
+                    && !isStock(trade)
                     && !Boolean(trade.is_locked)
                 );
             }
         );
 
-        selectAll.checked = (
-            selectable.length > 0
-            && selectable.every(
-                function (trade) {
-                    return state.selected.has(
-                        String(
-                            trade.position_id ?? ""
-                        )
-                    );
-                }
-            )
+        const stockSelectable = Array.from(
+            state.trades.values()
+        ).filter(
+            function (trade) {
+                return (
+                    !isExternal(trade)
+                    && isStock(trade)
+                    && !Boolean(trade.is_locked)
+                );
+            }
         );
 
-        selectAll.indeterminate = (
-            state.selected.size > 0
-            && !selectAll.checked
+        const selectAll = document.getElementById(
+            "atlas-select-all-trades"
         );
+
+        if (selectAll) {
+            selectAll.checked = (
+                cryptoSelectable.length > 0
+                && cryptoSelectable.every(
+                    function (trade) {
+                        return state.selected.has(
+                            String(
+                                trade.position_id ?? ""
+                            )
+                        );
+                    }
+                )
+            );
+
+            selectAll.indeterminate = (
+                state.selected.size > 0
+                && !selectAll.checked
+            );
+        }
+
+        const selectAllStocks = document.getElementById(
+            "atlas-select-all-trades-stocks"
+        );
+
+        if (selectAllStocks) {
+            selectAllStocks.checked = (
+                stockSelectable.length > 0
+                && stockSelectable.every(
+                    function (trade) {
+                        return state.selected.has(
+                            String(
+                                trade.position_id ?? ""
+                            )
+                        );
+                    }
+                )
+            );
+
+            selectAllStocks.indeterminate = (
+                state.selected.size > 0
+                && !selectAllStocks.checked
+            );
+        }
     }
 
     function ensureModal() {
@@ -15737,9 +16025,14 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             if (
-                event.target.id
-                === "atlas-select-all-trades"
+                event.target.id === "atlas-select-all-trades"
+                || event.target.id === "atlas-select-all-trades-stocks"
             ) {
+                const wantsStocks = (
+                    event.target.id
+                    === "atlas-select-all-trades-stocks"
+                );
+
                 for (
                     const trade
                     of state.trades.values()
@@ -15747,6 +16040,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (
                         isExternal(trade)
                         || Boolean(trade.is_locked)
+                        || isStock(trade) !== wantsStocks
                     ) {
                         continue;
                     }
@@ -15762,7 +16056,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 }
 
-                document
+                const panel = event.target.closest(
+                    ".atlas-trade-panel"
+                );
+
+                (panel || document)
                     .querySelectorAll(
                         ".atlas-trade-checkbox"
                         + ":not(:disabled)"
@@ -22740,8 +23038,11 @@ button.atlas-history-kpi strong {
     const state = {
         openDirection: "ALL",
         marginDirection: "ALL",
+        exchangeScope: "ALL",
         trades: [],
     };
+
+    window.atlasExchangeScope = "ALL";
 
     const formatter = new Intl.NumberFormat(
         "de-DE",
@@ -22780,15 +23081,31 @@ button.atlas-history-kpi strong {
             : 0;
     }
 
-    function filterDirection(
-        trades,
-        direction
-    ) {
-        if (direction === "ALL") {
+    function filterExchange(trades) {
+        if (state.exchangeScope === "ALL") {
             return trades;
         }
 
         return trades.filter(
+            trade =>
+                String(
+                    trade?.exchange ?? "BITUNIX"
+                ).toUpperCase()
+                === state.exchangeScope
+        );
+    }
+
+    function filterDirection(
+        trades,
+        direction
+    ) {
+        const scoped = filterExchange(trades);
+
+        if (direction === "ALL") {
+            return scoped;
+        }
+
+        return scoped.filter(
             trade =>
                 normalizeDirection(trade)
                 === direction
@@ -22972,6 +23289,48 @@ button.atlas-history-kpi strong {
             });
     }
 
+    function setupExchangeSwitcher() {
+        document
+            .querySelectorAll(
+                "#atlas-exchange-scope-switcher "
+                + "button[data-exchange]"
+            )
+            .forEach(function (button) {
+                button.addEventListener(
+                    "click",
+                    function () {
+                        const scope =
+                            button.dataset.exchange
+                            || "ALL";
+
+                        state.exchangeScope = scope;
+                        window.atlasExchangeScope = scope;
+
+                        document
+                            .querySelectorAll(
+                                "#atlas-exchange-scope-switcher "
+                                + "button"
+                            )
+                            .forEach(
+                                candidate =>
+                                    candidate.classList.toggle(
+                                        "active",
+                                        candidate === button
+                                    )
+                            );
+
+                        render();
+
+                        document.dispatchEvent(
+                            new CustomEvent(
+                                "atlas-exchange-scope-changed"
+                            )
+                        );
+                    }
+                );
+            });
+    }
+
     document.addEventListener(
         "DOMContentLoaded",
         function () {
@@ -22984,6 +23343,8 @@ button.atlas-history-kpi strong {
                 "margin",
                 "marginDirection"
             );
+
+            setupExchangeSwitcher();
 
             refresh();
 
