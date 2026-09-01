@@ -23,6 +23,7 @@ from app.database.position_limit_repository import (
     check_position_limit_blocked,
 )
 from app.exchanges.bitunix import BitunixClient
+from app.exchanges.blofin import BlofinClient
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,513 @@ def get_trade_lock(
 
 class TradingViewSignal(BaseModel):
     signal_id: str
+
+
+# ==========================================================
+# BLOFIN AKTIEN-FUTURES - VORBEREITUNG (Phase 1: einfach)
+# ==========================================================
+#
+# Symbole, die ueber Blofin statt Bitunix gehandelt werden.
+# Blofin unterstuetzt "Multi-Position Mode" (mehrere
+# unabhaengige Positionen im selben Symbol/derselben
+# Richtung) UND fuehrt diese als Aktien-Futures. Manuell
+# per Testorder verifiziert (05.09.2026): AAPLUSDT Long
+# ueber Blofin erfolgreich eroeffnet, Multi-Badge bestaetigt.
+#
+# Phase 1 bewusst OHNE TP2-Split und OHNE Break-Even-Modus -
+# nur einfaches TP/SL. Wird bei Bedarf spaeter erweitert.
+BLOFIN_STOCK_SYMBOLS = {
+    "METAUSDT", "TSLAUSDT", "NVDAUSDT", "AMZNUSDT", "MSFTUSDT",
+    "AMDUSDT", "GOOGLUSDT", "AAPLUSDT", "HOODUSDT", "CRCLUSDT",
+    "AVGOUSDT",
+}
+
+
+def _to_blofin_inst_id(symbol: str) -> str:
+    """"NVDAUSDT" -> "NVDA-USDT" (Blofin-Symbolformat)."""
+    normalized = str(symbol).strip().upper()
+    if normalized.endswith("USDT"):
+        return f"{normalized[:-4]}-USDT"
+    return normalized
+
+
+async def process_signal_blofin(
+    signal_id: str,
+    signal: dict,
+    force_live: bool = False,
+):
+    """
+    Vereinfachter Order-Pfad fuer Aktien-Futures ueber Blofin.
+    Phase 1: nur ein TP, ein SL, kein TP2, kein Break-Even.
+
+    WICHTIG: Einige Feldnamen in Blofins Order-/Positions-
+    Antworten (z.B. "positionId", "averagePrice") sind aus
+    der offiziellen Doku uebernommen, aber noch NICHT gegen
+    eine echte, von diesem Code selbst ausgeloeste Order
+    verifiziert. Vor dem produktiven Live-Einsatz unbedingt
+    mit einem force_live-Testaufruf pruefen und die Logs
+    genau kontrollieren.
+    """
+    received_at = time.perf_counter()
+
+    client = BlofinClient()
+    symbol = signal["symbol"]
+    inst_id = _to_blofin_inst_id(symbol)
+    margin_usdt = Decimal(str(signal["margin_usdt"]))
+    leverage = Decimal(str(signal["leverage"]))
+    direction = str(signal.get("direction") or "").strip().upper()
+
+    ticker_response = await client.get_ticker(inst_id)
+    ticker_data = ticker_response.get("data") or []
+
+    if not ticker_data:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": (
+                    f"Blofin lieferte keinen Ticker fuer "
+                    f"{inst_id}."
+                ),
+                "symbol": symbol,
+            },
+        )
+
+    ticker = ticker_data[0]
+    current_price = Decimal(str(ticker["last"]))
+
+    instruments_response = await client.get_instruments()
+    instruments = instruments_response.get("data") or []
+    instrument = next(
+        (
+            item
+            for item in instruments
+            if item.get("instId") == inst_id
+        ),
+        None,
+    )
+
+    if instrument is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    f"{inst_id} ist bei Blofin nicht gelistet."
+                ),
+                "symbol": symbol,
+            },
+        )
+
+    if str(instrument.get("state")) != "live":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    f"{inst_id} ist bei Blofin aktuell nicht "
+                    f"handelbar (state="
+                    f"{instrument.get('state')})."
+                ),
+                "symbol": symbol,
+            },
+        )
+
+    contract_value = Decimal(
+        str(instrument.get("contractValue") or "0.01")
+    )
+    lot_size = Decimal(str(instrument.get("lotSize") or "1"))
+    min_size = Decimal(str(instrument.get("minSize") or "1"))
+
+    position_value = margin_usdt * leverage
+    underlying_units = position_value / current_price
+    raw_contracts = underlying_units / contract_value
+
+    contracts = (
+        (raw_contracts / lot_size).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        * lot_size
+    )
+
+    if contracts < min_size:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Berechnete Menge {contracts} liegt unter "
+                f"der Mindestgroesse {min_size} Kontrakte."
+            ),
+        )
+
+    tp_percent = (
+        Decimal(str(signal["take_profit_percent"]))
+        / Decimal("100")
+    )
+    sl_percent = (
+        Decimal(str(signal["stop_loss_percent"]))
+        / Decimal("100")
+    )
+
+    if direction == "LONG":
+        side = "buy"
+        position_side = "long"
+        tp_price = current_price * (Decimal("1") + tp_percent)
+        sl_price = current_price * (Decimal("1") - sl_percent)
+    elif direction == "SHORT":
+        side = "sell"
+        position_side = "short"
+        tp_price = current_price * (Decimal("1") - tp_percent)
+        sl_price = current_price * (Decimal("1") + sl_percent)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Ungueltige Handelsrichtung.",
+        )
+
+    print("\n--- BLOFIN AKTIEN-SIGNAL ---")
+    print(f"Signal:    {signal['display_name']}")
+    print(f"Symbol:    {inst_id}")
+    print(f"Richtung:  {direction}")
+    print(f"Preis:     {current_price}")
+    print(f"Margin:    {margin_usdt} USDT")
+    print(f"Hebel:     {leverage}x")
+    print(f"Kontrakte: {contracts}")
+    print(f"TP:        {tp_price}")
+    print(f"SL:        {sl_price}")
+    print("-----------------------------\n")
+
+    should_execute_live = LIVE_TRADING_ENABLED or force_live
+
+    if not should_execute_live:
+        processing_time_ms = round(
+            (time.perf_counter() - received_at) * 1000, 3
+        )
+        return {
+            "status": "preview",
+            "signal_id": signal_id,
+            "exchange": "BLOFIN",
+            "live_order": False,
+            "processing_time_ms": processing_time_ms,
+            "message": "Live-Trading ist deaktiviert.",
+        }
+
+    trade_lock = get_trade_lock(symbol, side)
+
+    async with trade_lock:
+        try:
+            await client.set_leverage(
+                inst_id=inst_id,
+                leverage=str(int(leverage)),
+                margin_mode="cross",
+                position_side=position_side,
+            )
+        except Exception as exc:
+            logger.warning(
+                "BLOFIN HEBEL-SETZEN FEHLGESCHLAGEN: %s", exc
+            )
+
+        positions_before_response = await client.get_positions(
+            inst_id=inst_id
+        )
+        positions_before = (
+            positions_before_response.get("data", [])
+        )
+        old_position_ids = {
+            str(p.get("positionId"))
+            for p in positions_before
+            if p.get("positionId")
+        }
+
+        client_id = uuid.uuid4().hex
+
+        order_result = None
+        order_attempt_errors = []
+
+        for attempt in range(1, 4):
+            try:
+                order_result = await client.place_market_order(
+                    inst_id=inst_id,
+                    side=side,
+                    size=str(contracts),
+                    margin_mode="cross",
+                    position_side=position_side,
+                    client_order_id=client_id,
+                )
+            except Exception as exc:
+                order_attempt_errors.append(str(exc))
+                order_result = None
+                if attempt < 3:
+                    await asyncio.sleep(1.5)
+                continue
+
+            if str(order_result.get("code")) == "0":
+                break
+
+            # Vorruebergehende Blofin-Ausfaelle (z.B. Code
+            # 102093 "Service temporarily unavailable")
+            # verdienen einen erneuten Versuch, statt das
+            # Signal sofort zu verwerfen.
+            order_attempt_errors.append(str(order_result))
+            if attempt < 3:
+                await asyncio.sleep(1.5)
+
+        if order_result is None:
+            exc_summary = "; ".join(order_attempt_errors)
+            alert_message = (
+                "🚨 PROJECT ATLAS – BLOFIN ORDER-FEHLER\n\n"
+                "Beim Senden der Blofin-Market-Order ist ein "
+                "technischer Fehler aufgetreten (3 Versuche).\n\n"
+                f"Symbol: {inst_id}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Fehler: {exc_summary}\n\n"
+                "ACHTUNG: Bitte Blofin sofort manuell pruefen."
+            )
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": (
+                        "Blofin-Order konnte nach 3 Versuchen "
+                        "nicht gesendet werden."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": inst_id,
+                    "error": exc_summary,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+
+        if str(order_result.get("code")) != "0":
+            alert_message = (
+                "🚨 PROJECT ATLAS – BLOFIN ORDER ABGELEHNT\n\n"
+                f"Symbol: {inst_id}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Kontrakte: {contracts}\n"
+                f"Blofin Code: {order_result.get('code')}\n"
+                f"Meldung: {order_result.get('msg')}"
+            )
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": (
+                        "Blofin hat die Market-Order nicht "
+                        "erfolgreich angenommen."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": inst_id,
+                    "order_response": order_result,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+
+        new_position = None
+
+        for _ in range(25):
+            await asyncio.sleep(0.2)
+
+            positions_after_response = (
+                await client.get_positions(inst_id=inst_id)
+            )
+            positions_after = (
+                positions_after_response.get("data", [])
+            )
+
+            candidates = [
+                p
+                for p in positions_after
+                if str(p.get("positionId"))
+                not in old_position_ids
+                and p.get("positionSide") == position_side
+            ]
+
+            if len(candidates) == 1:
+                new_position = candidates[0]
+                break
+
+        if not new_position:
+            alert_message = (
+                "🚨 PROJECT ATLAS – BLOFIN POSITION NICHT "
+                "ZUGEORDNET\n\n"
+                "Eine Order wurde angenommen, aber die neue "
+                "Position konnte nicht eindeutig gefunden "
+                "werden.\n\n"
+                f"Symbol: {inst_id}\n"
+                f"Richtung: {direction}\n"
+                f"Client ID: {client_id}\n"
+                f"Kontrakte: {contracts}\n\n"
+                "ACHTUNG: Bitte Blofin sofort manuell "
+                "pruefen. Es koennte eine Position ohne "
+                "TP/SL offen sein."
+            )
+            telegram_sent = await send_telegram_alert(
+                alert_message
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": (
+                        "Order wurde ausgefuehrt, aber die "
+                        "neue Position konnte nicht "
+                        "eindeutig zugeordnet werden. Blofin "
+                        "muss manuell geprueft werden."
+                    ),
+                    "critical": True,
+                    "client_id": client_id,
+                    "symbol": inst_id,
+                    "telegram_alert_sent": telegram_sent,
+                },
+            )
+
+        position_id = str(new_position.get("positionId"))
+
+        entry_price_value = (
+            new_position.get("averagePrice")
+            or new_position.get("avgPx")
+        )
+
+        if entry_price_value in (None, ""):
+            actual_entry_price = current_price
+        else:
+            actual_entry_price = Decimal(
+                str(entry_price_value)
+            )
+
+            if direction == "LONG":
+                tp_price = actual_entry_price * (
+                    Decimal("1") + tp_percent
+                )
+                sl_price = actual_entry_price * (
+                    Decimal("1") - sl_percent
+                )
+            else:
+                tp_price = actual_entry_price * (
+                    Decimal("1") - tp_percent
+                )
+                sl_price = actual_entry_price * (
+                    Decimal("1") + sl_percent
+                )
+
+        try:
+            tpsl_result = await client.place_tpsl_order(
+                inst_id=inst_id,
+                position_side=position_side,
+                size=str(contracts),
+                tp_trigger_price=str(tp_price),
+                sl_trigger_price=str(sl_price),
+                margin_mode="cross",
+                position_id=position_id,
+                client_order_id=uuid.uuid4().hex,
+            )
+            tpsl_success = (
+                str(tpsl_result.get("code")) == "0"
+            )
+        except Exception as exc:
+            tpsl_result = {
+                "code": "exception",
+                "msg": str(exc),
+            }
+            tpsl_success = False
+
+        if not tpsl_success:
+            logger.error(
+                "BLOFIN TP/SL FEHLGESCHLAGEN | %s | %s",
+                inst_id,
+                position_id,
+            )
+
+            try:
+                await client.place_market_order(
+                    inst_id=inst_id,
+                    side=("sell" if side == "buy" else "buy"),
+                    size=str(contracts),
+                    margin_mode="cross",
+                    position_side=position_side,
+                    reduce_only=True,
+                    position_id=position_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "BLOFIN FAILSAFE CLOSE FAILED: %s", exc
+                )
+
+            alert_message = (
+                "🚨 PROJECT ATLAS – BLOFIN TP/SL "
+                "FEHLGESCHLAGEN\n\n"
+                f"Symbol: {inst_id}\n"
+                f"Position ID: {position_id}\n"
+                f"TP/SL-Antwort: {tpsl_result}\n\n"
+                "Notfall-Schliessung wurde versucht. Bitte "
+                "Blofin manuell pruefen."
+            )
+            await send_telegram_alert(alert_message)
+
+            return {
+                "status": "error",
+                "message": (
+                    "Trade wegen fehlendem TP/SL verworfen "
+                    "(Blofin)"
+                ),
+                "position_id": position_id,
+            }
+
+        order_data = order_result.get("data") or []
+        order_id_value = None
+        if isinstance(order_data, list) and order_data:
+            order_id_value = order_data[0].get("orderId")
+        elif isinstance(order_data, dict):
+            order_id_value = order_data.get("orderId")
+
+        stored_trade = create_open_trade(
+            position_id=position_id,
+            signal_id=signal_id,
+            signal_name=signal["display_name"],
+            symbol=symbol,
+            timeframe=signal.get("timeframe") or "UNKNOWN",
+            direction=direction,
+            entry_price=float(actual_entry_price),
+            tp_price=float(tp_price),
+            sl_price=float(sl_price),
+            margin_usdt=float(margin_usdt),
+            leverage=int(leverage),
+            quantity=float(contracts),
+            client_id=client_id,
+            order_id=(
+                str(order_id_value) if order_id_value else None
+            ),
+            exchange="BLOFIN",
+        )
+
+        database_saved = stored_trade is not None
+
+        processing_time_ms = round(
+            (time.perf_counter() - received_at) * 1000, 3
+        )
+
+        return {
+            "status": "trade_executed",
+            "signal_id": signal_id,
+            "exchange": "BLOFIN",
+            "client_id": client_id,
+            "live_order": True,
+            "symbol": symbol,
+            "direction": direction,
+            "position_id": position_id,
+            "database_saved": database_saved,
+            "margin_usdt": str(margin_usdt),
+            "leverage": str(leverage),
+            "qty": str(contracts),
+            "tp_price": str(tp_price),
+            "sl_price": str(sl_price),
+            "order_response": order_result,
+            "position_tpsl_response": tpsl_result,
+            "processing_time_ms": processing_time_ms,
+        }
 
 
 async def process_signal(
@@ -131,9 +639,16 @@ async def process_signal(
             },
         )
 
-    client = BitunixClient()
-
     symbol = signal["symbol"]
+
+    if symbol in BLOFIN_STOCK_SYMBOLS:
+        return await process_signal_blofin(
+            signal_id,
+            signal,
+            force_live=force_live,
+        )
+
+    client = BitunixClient()
 
     margin_usdt = Decimal(
         str(signal["margin_usdt"])
@@ -151,6 +666,24 @@ async def process_signal(
 
     ticker = ticker_response["data"][0]
     pair = pair_response["data"][0]
+
+    if not pair.get("isApiSupported", True):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    f"{symbol} ist bei BitUnix zwar gelistet, "
+                    "aber aktuell NICHT ueber die API handelbar "
+                    "(isApiSupported=False). BitUnix lehnt "
+                    "programmatische Orders fuer dieses Symbol "
+                    "ab - das ist eine Einschraenkung der Boerse, "
+                    "kein Fehler in Atlas. Signal wird nicht "
+                    "ausgefuehrt."
+                ),
+                "symbol": symbol,
+                "api_unsupported": True,
+            },
+        )
 
     current_price = Decimal(
         ticker["lastPrice"]
