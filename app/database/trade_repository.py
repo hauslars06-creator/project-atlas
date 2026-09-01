@@ -42,6 +42,7 @@ def create_open_trade(
     trade_source: str = "ATLAS",
     is_locked: bool = False,
     opened_at: datetime | None = None,
+    exchange: str = "BITUNIX",
 ) -> OpenTrade | None:
     """
     Speichert eine neu eröffnete Bitunix-Position.
@@ -92,6 +93,7 @@ def create_open_trade(
             tp2_quantity=float(tp2_quantity) if tp2_quantity is not None else None,
             runner_quantity=float(runner_quantity) if runner_quantity is not None else None,
             break_even_mode=str(break_even_mode or "OFF").strip().upper(),
+            exchange=str(exchange or "BITUNIX").strip().upper(),
         )
 
         db.add(trade)
