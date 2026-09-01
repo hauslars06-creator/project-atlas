@@ -18408,7 +18408,12 @@ window.addEventListener("hashchange",checkHash);
                 ),
                 fetchHistory(),
                 fetch(
-                    "/api/v1/trades/pnl-summary",
+                    "/api/v1/trades/pnl-summary"
+                    + (
+                        (window.atlasExchangeScope || "ALL") !== "ALL"
+                            ? "?exchange=" + encodeURIComponent(window.atlasExchangeScope)
+                            : ""
+                    ),
                     {cache:"no-store"}
                 )
             ]);
