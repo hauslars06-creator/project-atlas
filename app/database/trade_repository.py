@@ -472,6 +472,7 @@ def move_open_trade_to_history(
             order_id=trade.order_id,
             opened_at=trade.opened_at,
             closed_at=datetime.now(timezone.utc),
+            exchange=str(getattr(trade, "exchange", "BITUNIX") or "BITUNIX").strip().upper(),
         )
 
         db.add(history_entry)

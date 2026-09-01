@@ -249,6 +249,16 @@ class OpenTrade(Base):
     )
     # PROJECT ATLAS M5.3B EXTERNAL TRADES END
 
+    # Welche Boerse diesen Trade tatsaechlich ausgefuehrt hat
+    # (BITUNIX, BLOFIN, BITGET, BINGX). Default BITUNIX fuer
+    # Abwaertskompatibilitaet mit allen bestehenden Trades.
+    exchange: Mapped[str] = mapped_column(
+        String(20),
+        default="BITUNIX",
+        index=True,
+        nullable=False,
+    )
+
     is_locked: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
@@ -494,6 +504,13 @@ class TradeHistory(Base):
     closed_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+        index=True,
+        nullable=False,
+    )
+
+    exchange: Mapped[str] = mapped_column(
+        String(20),
+        default="BITUNIX",
         index=True,
         nullable=False,
     )

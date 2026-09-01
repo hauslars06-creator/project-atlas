@@ -116,11 +116,62 @@ def _ensure_position_limit_setting_columns() -> None:
             )
 
 
+def _ensure_open_trade_exchange_column() -> None:
+    """
+    Ergaenzt die exchange-Spalte idempotent in bereits
+    bestehenden SQLite-Datenbanken. Bestehende Zeilen
+    bekommen automatisch BITUNIX als Default.
+    """
+
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql(
+            "PRAGMA table_info(open_trades)"
+        ).fetchall()
+
+        existing_columns = {
+            str(row[1])
+            for row in rows
+        }
+
+        if "exchange" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE open_trades "
+                "ADD COLUMN exchange VARCHAR(20) "
+                "NOT NULL DEFAULT 'BITUNIX'"
+            )
+
+
+def _ensure_trade_history_exchange_column() -> None:
+    """
+    Ergaenzt die exchange-Spalte idempotent in bereits
+    bestehenden trade_history-Tabellen.
+    """
+
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql(
+            "PRAGMA table_info(trade_history)"
+        ).fetchall()
+
+        existing_columns = {
+            str(row[1])
+            for row in rows
+        }
+
+        if "exchange" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE trade_history "
+                "ADD COLUMN exchange VARCHAR(20) "
+                "NOT NULL DEFAULT 'BITUNIX'"
+            )
+
+
 def init_database():
     Base.metadata.create_all(bind=engine)
     _ensure_open_trade_live_columns()
     _ensure_sl_post_analysis_columns()
     _ensure_position_limit_setting_columns()
+    _ensure_open_trade_exchange_column()
+    _ensure_trade_history_exchange_column()
 
 
 def get_db():
