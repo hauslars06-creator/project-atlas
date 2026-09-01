@@ -432,12 +432,18 @@ async def list_trade_history(
 
 
 @router.get("/pnl-summary")
-async def pnl_summary():
+async def pnl_summary(exchange: str | None = None):
 
     db = SessionLocal()
 
     try:
         now = datetime.now(timezone.utc)
+
+        normalized_exchange = (
+            str(exchange).strip().upper()
+            if exchange
+            else None
+        )
 
         def calculate(days=None):
             # Manuelle/externe BitUnix-Trades zaehlen IMMER
@@ -468,6 +474,14 @@ async def pnl_summary():
                 )
             )
 
+            if normalized_exchange:
+                active_history = active_history.filter(
+                    TradeHistory.exchange == normalized_exchange
+                )
+                locked_history = locked_history.filter(
+                    TradeHistory.exchange == normalized_exchange
+                )
+
             if days:
                 cutoff = now - timedelta(days=days)
 
@@ -488,7 +502,7 @@ async def pnl_summary():
                 OpenTrade.is_locked.is_(False),
                 OpenTrade.signal_id != "EXTERNAL",
                 OpenTrade.status == "OPEN"
-            ).scalar()
+            )
 
             locked_open = db.query(
                 func.coalesce(
@@ -501,7 +515,18 @@ async def pnl_summary():
                     OpenTrade.signal_id == "EXTERNAL",
                 ),
                 OpenTrade.status == "OPEN"
-            ).scalar()
+            )
+
+            if normalized_exchange:
+                active_open = active_open.filter(
+                    OpenTrade.exchange == normalized_exchange
+                )
+                locked_open = locked_open.filter(
+                    OpenTrade.exchange == normalized_exchange
+                )
+
+            active_open = active_open.scalar()
+            locked_open = locked_open.scalar()
 
             return {
                 "active":
