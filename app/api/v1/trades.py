@@ -342,6 +342,11 @@ def serialize_history_trade(trade) -> dict:
             "close_reason",
             None,
         ),
+        "exchange": getattr(
+            trade,
+            "exchange",
+            "BITUNIX",
+        ),
         "is_locked": getattr(
             trade,
             "is_locked",
@@ -371,6 +376,7 @@ async def list_trade_history(
     result: str = "",
     status: str = "",
     lock_scope: str = "",
+    exchange: str = "",
     days: int | None = None,
     sort_by: str = "closed_at",
     sort_dir: str = "desc",
@@ -386,6 +392,7 @@ async def list_trade_history(
             close_reason=close_reason,
             result=result,
             lock_scope=lock_scope,
+            exchange=exchange,
             days=days,
             sort_by=sort_by,
             sort_dir=sort_dir,

@@ -555,6 +555,7 @@ def query_trade_history(
     close_reason: str = "",
     result: str = "",
     lock_scope: str = "",
+    exchange: str = "",
     days: int | None = None,
     sort_by: str = "closed_at",
     sort_dir: str = "desc",
@@ -624,6 +625,11 @@ def query_trade_history(
         if symbol:
             query = query.filter(
                 TradeHistory.symbol == symbol
+            )
+        if exchange:
+            query = query.filter(
+                TradeHistory.exchange
+                == str(exchange).strip().upper()
             )
 
         if timeframe:

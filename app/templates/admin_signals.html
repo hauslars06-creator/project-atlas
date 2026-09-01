@@ -18316,10 +18316,18 @@ window.addEventListener("hashchange",checkHash);
                 : "&lock_scope=ACTIVE"
         );
 
+        const exchangeScope =
+            window.atlasExchangeScope || "ALL";
+        const exchangeParam =
+            exchangeScope !== "ALL"
+                ? "&exchange=" + encodeURIComponent(exchangeScope)
+                : "";
+
         const firstUrl = (
             "/api/v1/trades/history"
             + "?days=" + historyDays
             + lockScopeParam
+            + exchangeParam
             + "&sort_by=closed_at"
             + "&sort_dir=desc"
             + "&page=1"
@@ -18499,6 +18507,13 @@ window.addEventListener("hashchange",checkHash);
              * Der History-Endpunkt wird passend zum
              * neuen Zeitraum erneut geladen.
              */
+            refresh();
+        }
+    );
+
+    document.addEventListener(
+        "atlas-exchange-scope-changed",
+        function () {
             refresh();
         }
     );
