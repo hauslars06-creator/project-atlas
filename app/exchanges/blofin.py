@@ -258,6 +258,31 @@ class BlofinClient:
             "GET", "/api/v1/account/positions", params=params
         )
 
+    async def cancel_tpsl_order(
+        self, *, inst_id: str, tpsl_id: str
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            "/api/v1/trade/cancel-tpsl",
+            json_body=[
+                {
+                    "instId": inst_id,
+                    "tpslId": tpsl_id,
+                    "clientOrderId": "",
+                }
+            ],
+        )
+
+    async def get_balance(self) -> dict[str, Any]:
+        """
+        Liefert die Futures-Kontostaende (alle Waehrungen).
+        Fuer USDT-Margin-Konten interessiert i.d.R. nur der
+        USDT-Eintrag - Filterung erfolgt aufrufseitig.
+        """
+        return await self._request(
+            "GET", "/api/v1/account/balance"
+        )
+
     # ------------------------------------------------------
     # Orders
     # ------------------------------------------------------
