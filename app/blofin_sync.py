@@ -136,8 +136,41 @@ async def synchronize_blofin_trades() -> dict:
         if missing_count < REQUIRED_MISSING_CHECKS:
             continue
 
+        exact_exit_price = None
+        exact_pnl_usdt = None
+        exact_pnl_percent = None
+
+        try:
+            history_response = await client.get_position_history(
+                position_id=position_id, limit="1"
+            )
+            history_data = history_response.get("data") or []
+
+            if history_data:
+                entry = history_data[0]
+                close_price_raw = entry.get("closeAveragePrice")
+                pnl_raw = entry.get("realizedPnl")
+                pnl_ratio_raw = entry.get("realizedPnlRatio")
+
+                if close_price_raw not in (None, ""):
+                    exact_exit_price = float(close_price_raw)
+                if pnl_raw not in (None, ""):
+                    exact_pnl_usdt = float(pnl_raw)
+                if pnl_ratio_raw not in (None, ""):
+                    exact_pnl_percent = float(pnl_ratio_raw) * 100
+        except Exception:
+            logger.exception(
+                "Blofin-Abschlusswerte fuer position_id=%s "
+                "konnten nicht abgerufen werden - "
+                "verwende Naeherungswert.",
+                position_id,
+            )
+
         history_entry = move_open_trade_to_history(
             position_id,
+            exit_price=exact_exit_price,
+            pnl_usdt=exact_pnl_usdt,
+            pnl_percent=exact_pnl_percent,
             close_reason="BLOFIN_POSITION_CLOSED",
         )
 

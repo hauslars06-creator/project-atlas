@@ -273,6 +273,29 @@ class BlofinClient:
             ],
         )
 
+    async def get_position_history(
+        self,
+        *,
+        inst_id: str | None = None,
+        position_id: str | None = None,
+        limit: str = "5",
+    ) -> dict[str, Any]:
+        """
+        Liefert die exakten Abschlusswerte bereits geschlossener
+        Positionen (closeAveragePrice, realizedPnl inkl. Gebuehren-
+        Effekt, fee). Wird beim Archivieren genutzt, um praezise
+        Werte statt eines Live-Sync-Naeherungswerts zu speichern.
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if inst_id:
+            params["instId"] = inst_id
+        if position_id:
+            params["positionId"] = position_id
+
+        return await self._request(
+            "GET", "/api/v1/account/positions-history", params=params
+        )
+
     async def get_balance(self) -> dict[str, Any]:
         """
         Liefert die Futures-Kontostaende (alle Waehrungen).
