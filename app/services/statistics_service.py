@@ -373,6 +373,7 @@ def _query_trades(
     symbol: str | None = None,
     timeframe: str | None = None,
     direction: str | None = None,
+    exchange: str | None = None,
 ) -> tuple[list[TradeHistory], PeriodBounds]:
     """
     lock_scope: "ACTIVE" -> nur is_locked=False,
@@ -458,6 +459,11 @@ def _query_trades(
                 query = query.filter(
                     TradeHistory.direction == normalized_direction
                 )
+
+        if exchange:
+            query = query.filter(
+                TradeHistory.exchange == exchange.strip().upper()
+            )
 
         trades = (
             query
@@ -2023,6 +2029,7 @@ def get_statistics(
     symbol: str | None = None,
     timeframe: str | None = None,
     direction: str | None = None,
+    exchange: str | None = None,
 ) -> dict[str, Any]:
     trades, bounds = _query_trades(
         period,
@@ -2032,6 +2039,7 @@ def get_statistics(
         symbol=symbol,
         timeframe=timeframe,
         direction=direction,
+        exchange=exchange,
     )
 
     return _analyze_trades(

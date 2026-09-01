@@ -41,6 +41,7 @@ async def statistics_summary(
     symbol: str | None = Query(default=None),
     timeframe: str | None = Query(default=None),
     direction: str | None = Query(default=None),
+    exchange: str | None = Query(default=None),
 ):
     try:
         result = get_statistics(
@@ -50,6 +51,7 @@ async def statistics_summary(
             symbol=symbol,
             timeframe=timeframe,
             direction=direction,
+            exchange=exchange,
         )
 
         return {
