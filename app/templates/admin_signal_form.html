@@ -172,16 +172,11 @@
 
 
             <div class="form-group">
-                <label for="symbol">Symbol</label>
-
-                <select
-                    id="symbol"
-                    name="symbol"
-                    required
-                >
+                <label for="symbol_crypto">Symbol (Krypto-Futures)</label>
+                <select id="symbol_crypto">
                     {% set current_symbol =
                         signal.symbol if signal else "" %}
-
+                    <option value="">-- Krypto wählen --</option>
                     {% for symbol in [
                         "BTCUSDT",
                         "ETHUSDT",
@@ -199,18 +194,7 @@
                         "ALGOUSDT",
                         "WIFUSDT",
                         "HYPEUSDT",
-                        "NEARUSDT",
-                        "NVDAUSDT",
-                        "METAUSDT",
-                        "TSLAUSDT",
-                        "AMZNUSDT",
-                        "GOOGLUSDT",
-                        "AMDUSDT",
-                        "SAMSUNGUSDT",
-                        "INTCUSDT",
-                        "MSFTUSDT",
-                        "APPLUSDT",
-                        "PYPLUSDT"
+                        "NEARUSDT"
                     ] %}
                         <option
                             value="{{ symbol }}"
@@ -223,6 +207,77 @@
                     {% endfor %}
                 </select>
             </div>
+
+            <div class="form-group">
+                <label for="symbol_stocks">Symbol (Aktien-Futures)</label>
+                <select id="symbol_stocks">
+                    <option value="">-- Aktie wählen --</option>
+                    {% for symbol in [
+                        "PYPLUSDT",
+                        "METAUSDT",
+                        "TSLAUSDT",
+                        "NVDAUSDT",
+                        "AMZNUSDT",
+                        "MSFTUSDT",
+                        "AMDUSDT",
+                        "GOOGLUSDT",
+                        "AAPLUSDT",
+                        "HOODUSDT",
+                        "CRCLUSDT",
+                        "AVGOUSDT",
+                        "MUUSDT",
+                        "INTCUSDT",
+                        "SPCXUSDT",
+                        "SNDKUSDT",
+                        "DELLUSDT",
+                        "PLTRUSDT",
+                        "NBISUSDT"
+                    ] %}
+                        <option
+                            value="{{ symbol }}"
+                            {% if current_symbol == symbol %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ symbol }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <input
+                type="hidden"
+                id="symbol"
+                name="symbol"
+                required
+                value="{{ current_symbol }}"
+            >
+
+            <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                var cryptoSelect = document.getElementById("symbol_crypto");
+                var stockSelect = document.getElementById("symbol_stocks");
+                var hiddenSymbol = document.getElementById("symbol");
+
+                if (cryptoSelect) {
+                    cryptoSelect.addEventListener("change", function () {
+                        if (cryptoSelect.value) {
+                            if (stockSelect) stockSelect.value = "";
+                            hiddenSymbol.value = cryptoSelect.value;
+                        }
+                    });
+                }
+
+                if (stockSelect) {
+                    stockSelect.addEventListener("change", function () {
+                        if (stockSelect.value) {
+                            if (cryptoSelect) cryptoSelect.value = "";
+                            hiddenSymbol.value = stockSelect.value;
+                        }
+                    });
+                }
+            });
+            </script>
 
 
             <div class="form-group">

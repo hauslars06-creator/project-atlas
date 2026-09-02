@@ -18,17 +18,25 @@ from app.database.models import OpenTrade, PositionLimitSetting
 # gelten als Krypto-Perpetual). Bei Bedarf hier ergaenzen,
 # wenn weitere Aktien-Symbole in "Signale anlegen" dazukommen.
 STOCK_SYMBOLS = {
-    "NVDAUSDT",
+    "PYPLUSDT",
     "METAUSDT",
     "TSLAUSDT",
+    "NVDAUSDT",
     "AMZNUSDT",
-    "GOOGLUSDT",
-    "AMDUSDT",
-    "SAMSUNGUSDT",
-    "INTCUSDT",
     "MSFTUSDT",
-    "APPLUSDT",
-    "PYPLUSDT",
+    "AMDUSDT",
+    "GOOGLUSDT",
+    "AAPLUSDT",
+    "HOODUSDT",
+    "CRCLUSDT",
+    "AVGOUSDT",
+    "MUUSDT",
+    "INTCUSDT",
+    "SPCXUSDT",
+    "SNDKUSDT",
+    "DELLUSDT",
+    "PLTRUSDT",
+    "NBISUSDT",
 }
 
 
