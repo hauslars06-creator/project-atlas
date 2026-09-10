@@ -482,9 +482,19 @@ async def synchronize_open_trades(
 
         open_trades_after_tpsl_sync = get_all_open_trades()
 
+        # Nur Alt-Konto-Trades (exchange="BITUNIX") duerfen
+        # hier verarbeitet werden - das neue Konto hat einen
+        # eigenen, separaten Sync-Job (bitunix_new_sync.py)
+        # und soll den automatischen Break-Even NICHT nutzen.
+        old_account_trades_for_be = [
+            t
+            for t in open_trades_after_tpsl_sync
+            if str(getattr(t, "exchange", "BITUNIX") or "BITUNIX").strip().upper() == "BITUNIX"
+        ]
+
         await manage_staged_break_even(
             client,
-            open_trades_after_tpsl_sync,
+            old_account_trades_for_be,
             position_lookup,
             active_tpsl_orders,
         )
