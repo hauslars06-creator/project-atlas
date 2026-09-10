@@ -13009,7 +13009,7 @@ document.addEventListener("DOMContentLoaded", function () {
      * PROJECT ATLAS M5.6 FINAL TPSL RENDERER START
      */
 
-    function targetHtml(trade, type) {
+    function targetHtml(trade, type, external) {
         const targetType = type === "sl" ? "sl" : "tp";
         const label = targetType === "tp" ? "TP" : "SL";
         const levels = normalizedTpSlLevels(trade, targetType);
@@ -13125,30 +13125,6 @@ document.addEventListener("DOMContentLoaded", function () {
                                 >
                                     BE
                                 </button>
-                                ${
-                                    external
-                                        ? `
-                                            <button
-                                                type="button"
-                                                class="
-                                                    atlas-small-action
-                                                    atlas-be-auto-button
-                                                    ${
-                                                        String(trade.break_even_mode || "OFF").toUpperCase() === "AUTO"
-                                                            ? "is-active"
-                                                            : ""
-                                                    }
-                                                "
-                                                data-action="toggle-auto-be"
-                                                data-position-id="${positionId}"
-                                                title="Automatischen Break-Even nach TP-Treffer umschalten"
-                                                aria-label="Automatischen Break-Even umschalten"
-                                            >
-                                                AUTO-BE
-                                            </button>
-                                        `
-                                        : ""
-                                }
                             `
                             : `
                                 <span
@@ -13493,11 +13469,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 </td>
 
                 <td>
-                    ${targetHtml(trade, "tp")}
+                    ${targetHtml(trade, "tp", external)}
                 </td>
 
                 <td>
-                    ${targetHtml(trade, "sl")}
+                    ${targetHtml(trade, "sl", external)}
                 </td>
 
                 <td>
@@ -13591,6 +13567,32 @@ document.addEventListener("DOMContentLoaded", function () {
                             )
                         }
                     </button>
+
+                    ${
+                        external
+                            ? `
+                                <button
+                                    type="button"
+                                    class="
+                                        atlas-row-action
+                                        ${
+                                            String(
+                                                trade.break_even_mode || "OFF"
+                                            ).toUpperCase() === "AUTO"
+                                                ? "locked"
+                                                : "unlocked"
+                                        }
+                                    "
+                                    data-action="toggle-auto-be"
+                                    data-position-id="${escapedId}"
+                                    title="Automatischen Break-Even nach TP-Treffer umschalten"
+                                    style="font-size: 10px; font-weight: 700; padding: 0 6px;"
+                                >
+                                    AUTO-BE
+                                </button>
+                            `
+                            : ""
+                    }
 
                     <button
                         type="button"
