@@ -13,6 +13,8 @@ from app.database.trade_repository import (
     get_unlocked_open_trades,
     set_trade_lock,
     query_trade_history,
+    set_trade_break_even_mode,
+    set_trade_notes,
 )
 
 from app.database.tpsl_repository import (
@@ -1142,6 +1144,66 @@ async def add_position_margin(
             status_code=500,
             detail=str(exc),
         ) from exc
+
+
+class BreakEvenModeRequest(BaseModel):
+    mode: str = Field(default="OFF")
+
+
+class NotesRequest(BaseModel):
+    notes: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/{position_id}/break-even-mode")
+async def update_break_even_mode(
+    position_id: str,
+    payload: BreakEvenModeRequest,
+):
+    """
+    Aktiviert/deaktiviert den automatischen Break-Even fuer
+    einen bestehenden Trade. "AUTO" ist fuer manuelle Trades
+    gedacht: sobald eine der bei Bitunix konfigurierten
+    TP-Stufen getroffen wird, verschiebt Atlas automatisch
+    den SL auf Netto-Break-Even + Slippage-Puffer.
+    """
+    try:
+        trade = set_trade_break_even_mode(
+            position_id, payload.mode
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=str(exc)
+        ) from exc
+
+    if trade is None:
+        raise HTTPException(
+            status_code=404, detail="Trade nicht gefunden."
+        )
+
+    return {
+        "success": True,
+        "position_id": position_id,
+        "break_even_mode": trade.break_even_mode,
+    }
+
+
+@router.post("/{position_id}/notes")
+async def update_trade_notes(
+    position_id: str,
+    payload: NotesRequest,
+):
+    trade = set_trade_notes(position_id, payload.notes)
+
+    if trade is None:
+        raise HTTPException(
+            status_code=404, detail="Trade nicht gefunden."
+        )
+
+    return {
+        "success": True,
+        "position_id": position_id,
+        "notes": trade.notes,
+    }
 
 
 class BreakEvenRequest(BaseModel):
