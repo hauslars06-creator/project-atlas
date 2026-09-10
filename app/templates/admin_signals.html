@@ -13184,6 +13184,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function signalHtml(trade, external) {
         if (external) {
+            const positionId = escapeHtml(
+                String(trade.position_id ?? "")
+            );
+            const notesValue = escapeHtml(
+                trade.notes ?? ""
+            );
+
             return `
                 <div class="atlas-signal-name">
                     Manueller Trade
@@ -13192,6 +13199,25 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="atlas-manual-label">
                     MANUELL
                 </span>
+
+                <input
+                    type="text"
+                    class="atlas-trade-notes-input"
+                    data-position-id="${positionId}"
+                    placeholder="Notiz ..."
+                    maxlength="500"
+                    value="${notesValue}"
+                    style="
+                        width: 100%;
+                        margin-top: 6px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        border: 1px solid #475569;
+                        border-radius: 4px;
+                        background: #0f172a;
+                        color: white;
+                    "
+                >
             `;
         }
 
@@ -16020,6 +16046,39 @@ document.addEventListener("DOMContentLoaded", function () {
             } else if (action === "modal-save") {
                 saveModal(control);
             }
+        },
+        true
+    );
+
+    document.addEventListener(
+        "blur",
+        function (event) {
+            if (
+                !(event.target instanceof HTMLInputElement)
+                || !event.target.classList.contains(
+                    "atlas-trade-notes-input"
+                )
+            ) {
+                return;
+            }
+
+            const positionId = event.target.dataset.positionId;
+
+            if (!positionId) {
+                return;
+            }
+
+            apiPost(
+                "/api/v1/trades/"
+                + encodeURIComponent(positionId)
+                + "/notes",
+                { notes: event.target.value }
+            ).catch(function (error) {
+                console.error(
+                    "Notiz konnte nicht gespeichert werden:",
+                    error
+                );
+            });
         },
         true
     );
