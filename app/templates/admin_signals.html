@@ -1908,6 +1908,35 @@
     color: #69b5ff;
 }
 
+#atlas-open-trades .atlas-auto-be-toggle {
+    display: block;
+    width: auto;
+    height: 18px;
+    margin-top: 4px;
+    padding: 0 6px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 18px;
+    white-space: nowrap;
+    text-align: center;
+    border: 1px solid #2c435c;
+    border-radius: 4px;
+    background: rgba(16, 32, 51, 0.95);
+    color: #a9bdcf;
+    cursor: pointer;
+}
+
+#atlas-open-trades .atlas-auto-be-toggle:hover {
+    border-color: #3289dc;
+    color: #69b5ff;
+}
+
+#atlas-open-trades .atlas-auto-be-toggle.locked {
+    background: rgba(220, 38, 38, 0.18);
+    border-color: rgba(220, 38, 38, 0.6);
+    color: #fca5a5;
+}
+
 #atlas-open-trades .atlas-margin-cell {
     display: inline-flex;
     align-items: center;
@@ -13574,7 +13603,7 @@ document.addEventListener("DOMContentLoaded", function () {
                                 <button
                                     type="button"
                                     class="
-                                        atlas-row-action
+                                        atlas-auto-be-toggle
                                         ${
                                             String(
                                                 trade.break_even_mode || "OFF"
@@ -13586,7 +13615,6 @@ document.addEventListener("DOMContentLoaded", function () {
                                     data-action="toggle-auto-be"
                                     data-position-id="${escapedId}"
                                     title="Automatischen Break-Even nach TP-Treffer umschalten"
-                                    style="font-size: 10px; font-weight: 700; padding: 0 6px;"
                                 >
                                     AUTO-BE
                                 </button>
