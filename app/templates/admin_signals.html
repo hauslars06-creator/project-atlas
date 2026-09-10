@@ -13125,6 +13125,30 @@ document.addEventListener("DOMContentLoaded", function () {
                                 >
                                     BE
                                 </button>
+                                ${
+                                    external
+                                        ? `
+                                            <button
+                                                type="button"
+                                                class="
+                                                    atlas-small-action
+                                                    atlas-be-auto-button
+                                                    ${
+                                                        String(trade.break_even_mode || "OFF").toUpperCase() === "AUTO"
+                                                            ? "is-active"
+                                                            : ""
+                                                    }
+                                                "
+                                                data-action="toggle-auto-be"
+                                                data-position-id="${positionId}"
+                                                title="Automatischen Break-Even nach TP-Treffer umschalten"
+                                                aria-label="Automatischen Break-Even umschalten"
+                                            >
+                                                AUTO-BE
+                                            </button>
+                                        `
+                                        : ""
+                                }
                             `
                             : `
                                 <span
@@ -15689,6 +15713,49 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 
+    async function toggleAutoBreakEven(positionId, button) {
+        const trade = state.trades.get(positionId);
+
+        if (!trade) {
+            return;
+        }
+
+        const currentMode = String(
+            trade.break_even_mode || "OFF"
+        ).toUpperCase();
+
+        const newMode = currentMode === "AUTO" ? "OFF" : "AUTO";
+
+        button.disabled = true;
+
+        try {
+            const result = await apiPost(
+                "/api/v1/trades/"
+                + encodeURIComponent(positionId)
+                + "/break-even-mode",
+                { mode: newMode }
+            );
+
+            if (result && result.success) {
+                trade.break_even_mode = result.break_even_mode;
+                toast(
+                    newMode === "AUTO"
+                        ? "Automatischer Break-Even aktiviert."
+                        : "Automatischer Break-Even deaktiviert.",
+                    "success"
+                );
+                refreshOpenTrades(true);
+            }
+        } catch (error) {
+            toast(
+                "Break-Even-Modus konnte nicht geaendert werden.",
+                "error"
+            );
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     async function toggleLock(positionId, button) {
         const trade = state.trades.get(positionId);
 
@@ -16037,6 +16104,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 openBulkTpSl();
             } else if (action === "toggle-lock") {
                 toggleLock(positionId, control);
+            } else if (action === "toggle-auto-be") {
+                toggleAutoBreakEven(positionId, control);
             } else if (action === "close-one") {
                 closeOne(positionId, control);
             } else if (action === "close-all") {
