@@ -151,6 +151,97 @@ def mark_trade_tp_processed(position_id: str, level: int, *, sl_price: float | N
         db.close()
 
 
+def update_manual_break_even_tracking(
+    position_id: str,
+    *,
+    tp_count: int,
+    triggered: bool | None = None,
+    sl_price: float | None = None,
+) -> OpenTrade | None:
+    """
+    Aktualisiert den TP-Order-Zaehlstand fuer die manuelle
+    Break-Even-Erkennung (break_even_mode="AUTO").
+    """
+    db = SessionLocal()
+    try:
+        trade = (
+            db.query(OpenTrade)
+            .filter(OpenTrade.position_id == str(position_id))
+            .first()
+        )
+        if trade is None:
+            return None
+        trade.manual_be_last_tp_count = int(tp_count)
+        if triggered is not None:
+            trade.manual_be_triggered = bool(triggered)
+        if sl_price is not None:
+            trade.sl_price = float(sl_price)
+        trade.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(trade)
+        return trade
+    finally:
+        db.close()
+
+
+def set_trade_break_even_mode(
+    position_id: str,
+    mode: str,
+) -> OpenTrade | None:
+    """
+    Setzt break_even_mode auf einem bestehenden Trade
+    (z.B. "AUTO" fuer manuelle Trades, oder "OFF" zum
+    Deaktivieren). Setzt den Zaehlstand zurueck, damit ein
+    neu aktivierter Modus sauber neu beginnt.
+    """
+    normalized = str(mode or "OFF").strip().upper()
+    if normalized not in {"OFF", "AUTO", "TP1", "TP2"}:
+        raise ValueError(f"Ungueltiger break_even_mode: {mode}")
+
+    db = SessionLocal()
+    try:
+        trade = (
+            db.query(OpenTrade)
+            .filter(OpenTrade.position_id == str(position_id))
+            .first()
+        )
+        if trade is None:
+            return None
+        trade.break_even_mode = normalized
+        trade.manual_be_last_tp_count = None
+        trade.manual_be_triggered = False
+        trade.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(trade)
+        return trade
+    finally:
+        db.close()
+
+
+def set_trade_notes(
+    position_id: str,
+    notes: str | None,
+) -> OpenTrade | None:
+    db = SessionLocal()
+    try:
+        trade = (
+            db.query(OpenTrade)
+            .filter(OpenTrade.position_id == str(position_id))
+            .first()
+        )
+        if trade is None:
+            return None
+        trade.notes = (
+            str(notes).strip()[:500] if notes else None
+        )
+        trade.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(trade)
+        return trade
+    finally:
+        db.close()
+
+
 
 def get_open_trades_by_signal(
     signal_id: str,
