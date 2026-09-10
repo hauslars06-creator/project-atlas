@@ -27,7 +27,10 @@ from app.database.webhook_queue_repository import (
     has_recent_webhook_activity,
 )
 from app.exchanges.bitunix import BitunixClient
-from app.break_even_manager import manage_staged_break_even
+from app.break_even_manager import (
+    manage_staged_break_even,
+    manage_manual_break_even,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -497,6 +500,12 @@ async def synchronize_open_trades(
             old_account_trades_for_be,
             position_lookup,
             active_tpsl_orders,
+        )
+
+        await manage_manual_break_even(
+            client,
+            old_account_trades_for_be,
+            position_lookup,
         )
 
         if snapshot_result["changed"] or legacy_changes:
