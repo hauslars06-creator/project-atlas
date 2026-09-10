@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 import time
@@ -649,7 +650,13 @@ async def process_signal(
             force_live=force_live,
         )
 
-    client = BitunixClient()
+    # Automatisierte Krypto-Signale laufen jetzt ueber das
+    # NEUE Bitunix-Konto. Das alte Konto bleibt ausschliesslich
+    # fuer manuelle/externe Trades reserviert (siehe trade_sync.py).
+    client = BitunixClient(
+        api_key=os.getenv("BITUNIX_NEW_API_KEY"),
+        api_secret=os.getenv("BITUNIX_NEW_API_SECRET"),
+    )
 
     margin_usdt = Decimal(
         str(signal["margin_usdt"])
@@ -1678,6 +1685,7 @@ async def process_signal(
             tp2_quantity=float(tp2_qty) if has_tp2 else None,
             runner_quantity=float(runner_qty) if has_tp2 else None,
             break_even_mode=break_even_mode if has_tp2 else "OFF",
+            exchange="BITUNIX_NEW",
         )
 
     database_saved = stored_trade is not None
