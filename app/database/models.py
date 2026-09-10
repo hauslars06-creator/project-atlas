@@ -259,6 +259,26 @@ class OpenTrade(Base):
         nullable=False,
     )
 
+    # Fuer den automatischen Break-Even bei manuellen Trades
+    # (break_even_mode="AUTO"): merkt sich die Anzahl aktiver
+    # TP-Orders beim letzten Check, um eine Verringerung
+    # (= eine TP-Stufe wurde getroffen) zu erkennen.
+    manual_be_last_tp_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    manual_be_triggered: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    # Freies Notizfeld fuer manuelle Trades.
+    notes: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     is_locked: Mapped[bool] = mapped_column(
         Boolean,
         default=False,

@@ -165,6 +165,42 @@ def _ensure_trade_history_exchange_column() -> None:
             )
 
 
+def _ensure_open_trade_manual_be_notes_columns() -> None:
+    """
+    Ergaenzt manual_be_last_tp_count, manual_be_triggered und
+    notes idempotent in bereits bestehenden open_trades-Tabellen.
+    """
+
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql(
+            "PRAGMA table_info(open_trades)"
+        ).fetchall()
+
+        existing_columns = {
+            str(row[1])
+            for row in rows
+        }
+
+        if "manual_be_last_tp_count" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE open_trades "
+                "ADD COLUMN manual_be_last_tp_count INTEGER"
+            )
+
+        if "manual_be_triggered" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE open_trades "
+                "ADD COLUMN manual_be_triggered BOOLEAN "
+                "NOT NULL DEFAULT 0"
+            )
+
+        if "notes" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE open_trades "
+                "ADD COLUMN notes VARCHAR(500)"
+            )
+
+
 def init_database():
     Base.metadata.create_all(bind=engine)
     _ensure_open_trade_live_columns()
@@ -172,6 +208,7 @@ def init_database():
     _ensure_position_limit_setting_columns()
     _ensure_open_trade_exchange_column()
     _ensure_trade_history_exchange_column()
+    _ensure_open_trade_manual_be_notes_columns()
 
 
 def get_db():
