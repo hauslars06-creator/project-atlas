@@ -140,6 +140,8 @@ def serialize_open_trade(trade, tpsl_orders: list | None = None) -> dict:
         ),
         "trade_source": getattr(trade, "trade_source", "ATLAS"),
         "exchange": getattr(trade, "exchange", "BITUNIX"),
+        "break_even_mode": getattr(trade, "break_even_mode", "OFF"),
+        "notes": getattr(trade, "notes", None),
         "is_locked": getattr(trade, "is_locked", False),
         "current_price": getattr(trade, "current_price", None),
         "unrealized_pnl": getattr(trade, "unrealized_pnl", None),
