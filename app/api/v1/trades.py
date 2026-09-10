@@ -1,3 +1,4 @@
+import os
 import asyncio
 
 from fastapi import APIRouter, HTTPException
@@ -29,6 +30,27 @@ router = APIRouter(
     prefix="/trades",
     tags=["Trades"],
 )
+
+
+def _client_for_trade(trade) -> BitunixClient:
+    """
+    Waehlt den passenden Bitunix-Client fuer einen Trade
+    anhand seines exchange-Feldes. Automatisierte Signal-
+    Trades laufen ueber das NEUE Konto (exchange=
+    "BITUNIX_NEW"), manuelle/externe Trades und alles
+    andere weiterhin ueber das alte Standard-Konto.
+    """
+    exchange = str(
+        getattr(trade, "exchange", "BITUNIX") or "BITUNIX"
+    ).strip().upper()
+
+    if exchange == "BITUNIX_NEW":
+        return BitunixClient(
+            api_key=os.getenv("BITUNIX_NEW_API_KEY"),
+            api_secret=os.getenv("BITUNIX_NEW_API_SECRET"),
+        )
+
+    return BitunixClient()
 
 
 def _positive_number(value) -> float | None:
@@ -619,13 +641,14 @@ async def close_all_unlocked_trades(
                 ),
             }
 
-        client = BitunixClient()
         results = []
 
         for trade in unlocked_trades:
             position_id = str(trade.position_id)
 
             try:
+                client = _client_for_trade(trade)
+
                 exchange_response = (
                     await client.flash_close_position(
                         position_id=position_id,
@@ -1067,7 +1090,7 @@ async def add_position_margin(
     symbol = str(trade.symbol)
 
     try:
-        client = BitunixClient()
+        client = _client_for_trade(trade)
 
         ticker_response = await client.get_ticker(symbol)
         pair_response = await client.get_trading_pair(symbol)
@@ -1379,7 +1402,7 @@ async def close_single_trade(
     trade = require_unlocked_trade(position_id)
 
     try:
-        client = BitunixClient()
+        client = _client_for_trade(trade)
 
         exchange_response = (
             await client.flash_close_position(
@@ -1689,7 +1712,7 @@ async def update_tpsl_order_by_percent(
         )
 
     try:
-        client = BitunixClient()
+        client = _client_for_trade(trade)
 
         exchange_response = await client.modify_tpsl_order(
             order_id=str(order_id),
@@ -1893,7 +1916,7 @@ async def update_single_trade_tpsl(
         )
 
     try:
-        client = BitunixClient()
+        client = _client_for_trade(trade)
 
         exchange_response = (
             await client.place_position_tpsl(
