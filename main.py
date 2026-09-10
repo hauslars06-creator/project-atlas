@@ -8,6 +8,7 @@ from app.exchanges.bitunix import BitunixClient
 from app.api.v1.router import router as api_v1_router
 from app.trade_sync import trade_sync_loop
 from app.blofin_sync import blofin_sync_loop
+from app.bitunix_new_sync import bitunix_new_sync_loop
 from app.webhook_worker import webhook_worker_loop
 from app.security_monitor import security_monitor_loop
 from app.sl_analysis import sl_analysis_loop
@@ -59,6 +60,10 @@ async def startup_event():
     blofin_sync_task = asyncio.create_task(
         blofin_sync_loop(),
         name="project-atlas-blofin-sync",
+    )
+    bitunix_new_sync_task = asyncio.create_task(
+        bitunix_new_sync_loop(),
+        name="project-atlas-bitunix-new-sync",
     )
 
     webhook_worker_task = asyncio.create_task(
@@ -135,6 +140,16 @@ async def bitunix_account():
     client = BitunixClient()
 
     result = await client.get_usdt_account()
+
+    return result
+
+
+@app.get("/blofin/account")
+async def blofin_account():
+    from app.exchanges.blofin import BlofinClient
+    client = BlofinClient()
+
+    result = await client.get_balance()
 
     return result
 @app.get("/bitunix/positions")
