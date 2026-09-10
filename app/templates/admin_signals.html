@@ -1934,10 +1934,11 @@
     color: #69b5ff;
 }
 
-#atlas-open-trades .atlas-auto-be-toggle.locked {
-    background: rgba(220, 38, 38, 0.18);
-    border-color: rgba(220, 38, 38, 0.6);
-    color: #fca5a5;
+#atlas-open-trades .atlas-auto-be-toggle.is-active {
+    background: #16a34a !important;
+    border-color: #16a34a !important;
+    color: #f0fdf4 !important;
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.4);
 }
 
 #atlas-open-trades .atlas-margin-cell {
@@ -13244,6 +13245,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         margin-top: 6px;
                         padding: 4px 8px;
                         font-size: 12px;
+                        font-weight: 700;
                         border: 1px solid #475569;
                         border-radius: 4px;
                         background: #0f172a;
@@ -13611,8 +13613,8 @@ document.addEventListener("DOMContentLoaded", function () {
                                             String(
                                                 trade.break_even_mode || "OFF"
                                             ).toUpperCase() === "AUTO"
-                                                ? "locked"
-                                                : "unlocked"
+                                                ? "is-active"
+                                                : ""
                                         }
                                     "
                                     data-action="toggle-auto-be"
