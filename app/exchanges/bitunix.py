@@ -34,9 +34,19 @@ class _ReusedClientContext:
 
 
 class BitunixClient:
-    def __init__(self) -> None:
-        self.api_key = os.getenv("BITUNIX_API_KEY")
-        self.api_secret = os.getenv("BITUNIX_API_SECRET")
+    def __init__(
+        self,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> None:
+        # Optionale Parameter erlauben ein ZWEITES Bitunix-
+        # Konto (z.B. BITUNIX_NEW_API_KEY/SECRET), ohne das
+        # Standardverhalten (altes Konto ueber die normalen
+        # BITUNIX_API_KEY/SECRET-Variablen) zu veraendern.
+        self.api_key = api_key or os.getenv("BITUNIX_API_KEY")
+        self.api_secret = (
+            api_secret or os.getenv("BITUNIX_API_SECRET")
+        )
         self.base_url = os.getenv(
             "BITUNIX_BASE_URL",
             "https://fapi.bitunix.com",
