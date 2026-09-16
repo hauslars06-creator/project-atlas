@@ -13735,9 +13735,29 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     }
 
+    const ATLAS_BIG_FIVE_SYMBOLS = [
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"
+    ];
+
+    function isBigFive(trade) {
+        return ATLAS_BIG_FIVE_SYMBOLS.includes(
+            String(trade.symbol || "").toUpperCase()
+        );
+    }
+
     function dashboardHtml(trades) {
         const externalTrades = trades.filter(
             isExternal
+        );
+
+        const externalBigFiveTrades = externalTrades.filter(
+            isBigFive
+        );
+
+        const externalOtherTrades = externalTrades.filter(
+            function (trade) {
+                return !isBigFive(trade);
+            }
         );
 
         const atlasTrades = trades.filter(
@@ -13808,12 +13828,12 @@ document.addEventListener("DOMContentLoaded", function () {
                             ${icon("pin")}
 
                             <span>
-                                GESPERRTE TRADES
+                                GESPERRTE TRADES - TOP 5 KRYPTO
                                 (MANUELL AUF BITUNIX ERÖFFNET)
                             </span>
 
                             <span class="atlas-count external">
-                                ${externalTrades.length}
+                                ${externalBigFiveTrades.length}
                             </span>
 
                             <span class="atlas-pinned-message">
@@ -13822,7 +13842,48 @@ document.addEventListener("DOMContentLoaded", function () {
                         </div>
                     </header>
 
-                    ${tableHtml(externalTrades, true)}
+                    ${
+                        tableHtml(
+                            externalBigFiveTrades,
+                            true,
+                            "locked-big5"
+                        )
+                    }
+                </section>
+
+                <section class="
+                    atlas-trade-panel
+                    atlas-external-panel
+                ">
+                    <header class="atlas-panel-header">
+                        <div class="
+                            atlas-panel-title
+                            atlas-external-title
+                        ">
+                            ${icon("pin")}
+
+                            <span>
+                                GESPERRTE TRADES - SONSTIGE
+                                (MANUELL AUF BITUNIX ERÖFFNET)
+                            </span>
+
+                            <span class="atlas-count external">
+                                ${externalOtherTrades.length}
+                            </span>
+
+                            <span class="atlas-pinned-message">
+                                Diese Trades sind oben gepinnt
+                            </span>
+                        </div>
+                    </header>
+
+                    ${
+                        tableHtml(
+                            externalOtherTrades,
+                            true,
+                            "locked-other"
+                        )
+                    }
                 </section>
 
                 <section class="atlas-trade-panel">
