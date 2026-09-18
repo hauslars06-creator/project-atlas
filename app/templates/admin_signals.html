@@ -13819,6 +13819,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <section class="
                     atlas-trade-panel
                     atlas-external-panel
+                    atlas-external-panel-big5
                 ">
                     <header class="atlas-panel-header">
                         <div class="
@@ -13854,6 +13855,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <section class="
                     atlas-trade-panel
                     atlas-external-panel
+                    atlas-external-panel-other
                 ">
                     <header class="atlas-panel-header">
                         <div class="
@@ -20962,13 +20964,25 @@ function enhancePanels(){
      */
     root
         .querySelectorAll(
-            ".atlas-external-panel"
+            ".atlas-external-panel-big5"
         )
         .forEach(function(panel){
 
             wrapPanel(
                 panel,
-                "external"
+                "external-big5"
+            );
+        });
+
+    root
+        .querySelectorAll(
+            ".atlas-external-panel-other"
+        )
+        .forEach(function(panel){
+
+            wrapPanel(
+                panel,
+                "external-other"
             );
         });
 
