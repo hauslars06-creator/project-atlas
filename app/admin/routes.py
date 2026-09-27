@@ -78,6 +78,26 @@ SIGNAL_SORTABLE_COLUMNS = {
 }
 
 
+@router.get("/admin/mobile")
+async def admin_mobile_dashboard(
+    request: Request,
+    admin_user: str = Depends(verify_admin),
+):
+    """
+    Schlanke Mobile-Ansicht: zeigt nur die gesperrten/
+    manuellen Trades (Big-5-Kryptos + Sonstige) mit
+    BE-/Auto-BE-Aktionen. Daten laedt die Seite selbst
+    per JS ueber die bestehende /api/v1/trades/open-Route.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_mobile.html",
+        context={
+            "admin_user": admin_user,
+        },
+    )
+
+
 @router.get("/admin")
 async def admin_dashboard(
     request: Request,

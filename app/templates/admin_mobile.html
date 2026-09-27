@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Atlas Mobile</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --border: #1f2a35;
+    --text: #e6edf3;
+    --muted: #8b96a3;
+    --green: #22c55e;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 12px;
+    padding-bottom: 60px;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 4px 0 14px;
+  }
+  h2.group-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 20px 0 8px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .symbol {
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .dir-long { color: var(--green); }
+  .dir-short { color: var(--red); }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .row b { color: var(--text); font-weight: 600; }
+  .pnl-pos { color: var(--green); font-weight: 700; }
+  .pnl-neg { color: var(--red); font-weight: 700; }
+  .notes-input {
+    width: 100%;
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #0d1319;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    flex: 1;
+    padding: 9px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #1a2330;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .btn:active { opacity: 0.7; }
+  .btn-auto-be.is-active {
+    background: var(--green);
+    border-color: var(--green);
+    color: #ffffff;
+  }
+  .empty {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 20px 0;
+    text-align: center;
+  }
+  #status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+  <h1>Atlas &middot; Gesperrte Trades</h1>
+  <div id="status">Lade...</div>
+
+  <h2 class="group-title">Top 5 Krypto</h2>
+  <div id="group-big5"></div>
+
+  <h2 class="group-title">Sonstige</h2>
+  <div id="group-other"></div>
+
+<script>
+const BIG_FIVE = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"];
+const REFRESH_MS = 10000;
+
+function fmt(n, digits) {
+  if (n === null || n === undefined || isNaN(n)) return "-";
+  return Number(n).toFixed(digits !== undefined ? digits : 2);
+}
+
+function cardHtml(trade) {
+  const dir = String(trade.direction || "").toUpperCase();
+  const dirClass = dir === "LONG" ? "dir-long" : "dir-short";
+  const pnl = trade.unrealized_pnl;
+  const pnlClass = (pnl || 0) >= 0 ? "pnl-pos" : "pnl-neg";
+  const isAuto = trade.break_even_mode === "AUTO";
+  const notes = trade.notes ? String(trade.notes) : "";
+
+  return `
+    <div class="card" data-position-id="${trade.position_id}">
+      <div class="card-top">
+        <span class="symbol">${trade.symbol}</span>
+        <span class="${dirClass}">${dir}</span>
+      </div>
+      <div class="row"><span>Entry</span><b>${fmt(trade.entry_price, 4)}</b></div>
+      <div class="row"><span>Aktuell</span><b>${fmt(trade.current_price, 4)}</b></div>
+      <div class="row"><span>PnL</span><b class="${pnlClass}">${fmt(pnl)} USDT (${fmt(trade.pnl_percent)}%)</b></div>
+      <input
+        class="notes-input"
+        type="text"
+        placeholder="Notiz..."
+        value="${notes.replace(/"/g, "&quot;")}"
+        data-position-id="${trade.position_id}"
+      />
+      <div class="actions">
+        <button class="btn btn-be" data-action="be" data-position-id="${trade.position_id}">BE</button>
+        <button class="btn btn-auto-be ${isAuto ? "is-active" : ""}" data-action="auto-be" data-position-id="${trade.position_id}" data-current-mode="${trade.break_even_mode || "OFF"}">
+          ${isAuto ? "AUTO-BE AN" : "AUTO-BE"}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadTrades() {
+  const statusEl = document.getElementById("status");
+  try {
+    const res = await fetch("/api/v1/trades/open?lock_scope=LOCKED");
+    const data = await res.json();
+    const trades = data.trades || [];
+
+    const big5 = trades.filter(t => BIG_FIVE.includes(String(t.symbol || "").toUpperCase()));
+    const other = trades.filter(t => !BIG_FIVE.includes(String(t.symbol || "").toUpperCase()));
+
+    document.getElementById("group-big5").innerHTML =
+      big5.length ? big5.map(cardHtml).join("") : '<div class="empty">Keine offenen Trades</div>';
+    document.getElementById("group-other").innerHTML =
+      other.length ? other.map(cardHtml).join("") : '<div class="empty">Keine offenen Trades</div>';
+
+    statusEl.textContent = "Aktualisiert: " + new Date().toLocaleTimeString("de-DE");
+  } catch (err) {
+    statusEl.textContent = "Fehler beim Laden.";
+  }
+}
+
+document.addEventListener("click", async (event) => {
+  const btn = event.target.closest("button[data-action]");
+  if (!btn) return;
+
+  const positionId = btn.dataset.positionId;
+  const action = btn.dataset.action;
+
+  if (action === "be") {
+    btn.textContent = "...";
+    try {
+      const res = await fetch(`/api/v1/trades/${positionId}/break-even`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slippage_percent: 0.1 }),
+      });
+      if (!res.ok) throw new Error("fail");
+      btn.textContent = "OK";
+    } catch (err) {
+      btn.textContent = "Fehler";
+    }
+    setTimeout(loadTrades, 1200);
+  }
+
+  if (action === "auto-be") {
+    const currentMode = btn.dataset.currentMode || "OFF";
+    const newMode = currentMode === "AUTO" ? "OFF" : "AUTO";
+    try {
+      const res = await fetch(`/api/v1/trades/${positionId}/break-even-mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode }),
+      });
+      if (!res.ok) throw new Error("fail");
+      await loadTrades();
+    } catch (err) {
+      btn.textContent = "Fehler";
+    }
+  }
+});
+
+document.addEventListener("blur", async (event) => {
+  const input = event.target.closest(".notes-input");
+  if (!input) return;
+  const positionId = input.dataset.positionId;
+  try {
+    await fetch(`/api/v1/trades/${positionId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: input.value }),
+    });
+  } catch (err) {
+    // still ok
+  }
+}, true);
+
+loadTrades();
+setInterval(loadTrades, REFRESH_MS);
+</script>
+</body>
+</html>
