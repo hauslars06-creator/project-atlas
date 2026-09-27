@@ -17399,9 +17399,15 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const headingScope = (
+            manualTable.closest(
+                ".atlas-trade-panel"
+            ) || root
+        );
+
         const heading = (
             findDeepestManualHeadingElement(
-                root
+                headingScope
             )
         );
 
@@ -20774,6 +20780,8 @@ const ROOT_ID = "atlas-open-trades";
 
 const STORAGE_KEYS = {
     external: "atlasDashboardExternalCollapsed",
+    "external-big5": "atlasDashboardExternalBig5Collapsed",
+    "external-other": "atlasDashboardExternalOtherCollapsed",
     active: "atlasDashboardActiveCollapsed"
 };
 
